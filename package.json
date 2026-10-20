@@ -1,0 +1,10 @@
+{
+  "name": "money-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Track hours worked, money earned, and how much you can spend.",
+  "scripts": {
+    "start": "npx --yes http-server@14.1.1 -c-1 -p 8080 .",
+    "test": "node --test test/*.test.js"
+  }
+}

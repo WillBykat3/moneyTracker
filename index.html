@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Money Tracker</title>
+  <meta name="description" content="Track hours worked, money earned, and how much you can spend.">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Money">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Money Tracker</h1>
+    <div class="period">
+      <button type="button" id="period-prev" class="icon-btn" aria-label="Previous period">&#8249;</button>
+      <div class="period-middle">
+        <select id="period-select" aria-label="Time period">
+          <option value="week">Week</option>
+          <option value="month">Month</option>
+          <option value="year">Year</option>
+          <option value="all">All time</option>
+        </select>
+        <button type="button" id="period-label" class="period-label"></button>
+      </div>
+      <button type="button" id="period-next" class="icon-btn" aria-label="Next period">&#8250;</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Sections">
+    <button type="button" class="tab" data-view="dashboard" aria-current="page">
+      <span class="tab-icon" aria-hidden="true">&#9673;</span>Overview
+    </button>
+    <button type="button" class="tab" data-view="work">
+      <span class="tab-icon" aria-hidden="true">&#9201;</span>Work
+    </button>
+    <button type="button" class="tab" data-view="spending">
+      <span class="tab-icon" aria-hidden="true">&#9636;</span>Spending
+    </button>
+    <button type="button" class="tab" data-view="settings">
+      <span class="tab-icon" aria-hidden="true">&#9881;</span>Settings
+    </button>
+  </nav>
+
+  <main>
+    <!-- ================= OVERVIEW ================= -->
+    <section id="view-dashboard" class="view">
+      <div id="onboarding" class="card notice" hidden>
+        <h2>Getting started</h2>
+        <ol>
+          <li>Set your hourly pay and how much you want to spend in <a href="#settings" data-goto="settings">Settings</a>.</li>
+          <li>Log your hours on the <a href="#work" data-goto="work">Work</a> tab.</li>
+          <li>Log what you buy on the <a href="#spending" data-goto="spending">Spending</a> tab.</li>
+        </ol>
+      </div>
+      <div class="card hero">
+        <div class="hero-label">Left to spend</div>
+        <div id="hero-remaining" class="hero-amount">$0.00</div>
+        <div class="meter" role="progressbar" aria-label="Share of spending budget used"
+             aria-valuemin="0" aria-valuemax="100" id="budget-meter">
+          <div class="meter-fill" id="budget-meter-fill"></div>
+        </div>
+        <div id="hero-detail" class="hero-detail"></div>
+      </div>
+
+      <div class="card">
+        <label for="spend-slider" class="slider-label">
+          I can spend <strong><span id="spend-percent-out">50</span>%</strong> of my take-home pay
+        </label>
+        <input type="range" id="spend-slider" min="0" max="100" step="1" value="50">
+        <div class="split">
+          <div class="split-item spend">
+            <div class="split-name">Spending money</div>
+            <div class="split-value" id="split-spend">$0.00</div>
+          </div>
+          <div class="split-item save">
+            <div class="split-name">Savings (<span id="save-percent-out">50</span>%)</div>
+            <div class="split-value" id="split-save">$0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <h2>Spending by category</h2>
+        <div id="category-breakdown"></div>
+      </div>
+
+    </section>
+
+    <!-- ================= WORK ================= -->
+    <section id="view-work" class="view" hidden>
+      <form id="shift-form" class="card form" novalidate>
+        <h2 id="shift-form-title">Log hours worked</h2>
+        <div class="row">
+          <label>Date
+            <input type="date" name="date" required>
+          </label>
+          <label>Hours
+            <input type="number" name="hours" inputmode="decimal" min="0.01" max="24" step="0.01" required placeholder="e.g. 7.5">
+          </label>
+        </div>
+        <details class="times">
+          <summary>Work it out from start and end times</summary>
+          <div class="row three">
+            <label>Start <input type="time" name="start"></label>
+            <label>End <input type="time" name="end"></label>
+            <label>Unpaid break (min) <input type="number" name="break" inputmode="numeric" min="0" step="1" value="0"></label>
+          </div>
+        </details>
+        <div class="row">
+          <label>Hourly pay
+            <input type="text" name="rate" inputmode="decimal" required autocomplete="off">
+          </label>
+          <label>Tips / bonus (optional)
+            <input type="text" name="tips" inputmode="decimal" placeholder="0.00" autocomplete="off">
+          </label>
+        </div>
+        <label>Note (optional)
+          <input type="text" name="note" maxlength="200" placeholder="e.g. Saturday shift" autocomplete="off">
+        </label>
+        <div class="preview" id="shift-preview" aria-live="polite"></div>
+        <p class="error" id="shift-error" role="alert"></p>
+        <div class="actions">
+          <button type="submit" class="primary" id="shift-submit">Add hours</button>
+          <button type="button" class="secondary" id="shift-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Hours in this period</h2>
+        <ul class="entries" id="shift-list"></ul>
+      </div>
+    </section>
+
+    <!-- ================= SPENDING ================= -->
+    <section id="view-spending" class="view" hidden>
+      <form id="expense-form" class="card form" novalidate>
+        <h2 id="expense-form-title">Log spending</h2>
+        <div class="row">
+          <label>Date
+            <input type="date" name="date" required>
+          </label>
+          <label>Amount
+            <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off">
+          </label>
+        </div>
+        <label>Category
+          <input type="text" name="category" list="category-options" maxlength="40" placeholder="Pick or type one" autocomplete="off">
+          <datalist id="category-options"></datalist>
+        </label>
+        <label>Note (optional)
+          <input type="text" name="note" maxlength="200" placeholder="e.g. Lunch with friends" autocomplete="off">
+        </label>
+        <div class="preview" id="expense-preview" aria-live="polite"></div>
+        <p class="error" id="expense-error" role="alert"></p>
+        <div class="actions">
+          <button type="submit" class="primary" id="expense-submit">Add spending</button>
+          <button type="button" class="secondary" id="expense-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Spending in this period</h2>
+        <ul class="entries" id="expense-list"></ul>
+      </div>
+    </section>
+
+    <!-- ================= SETTINGS ================= -->
+    <section id="view-settings" class="view" hidden>
+      <form id="settings-form" class="card form" novalidate>
+        <h2>Pay &amp; budget</h2>
+        <label>Usual hourly pay
+          <input type="text" name="rate" inputmode="decimal" required autocomplete="off">
+          <small>Used as the default when you log hours. You can change it per shift.</small>
+        </label>
+        <label>Taxes &amp; deductions (%)
+          <input type="number" name="tax" inputmode="decimal" min="0" max="100" step="0.1" required>
+          <small>A rough estimate of what comes out of your paycheck. Use 0 to track gross pay.</small>
+        </label>
+        <label>I can spend (%) of take-home pay
+          <input type="number" name="spend" inputmode="decimal" min="0" max="100" step="1" required>
+          <small>The rest is counted as savings.</small>
+        </label>
+        <div class="row">
+          <label>Currency
+            <select name="currency">
+              <option value="USD">USD ($)</option>
+              <option value="CAD">CAD ($)</option>
+              <option value="AUD">AUD ($)</option>
+              <option value="NZD">NZD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="INR">INR (₹)</option>
+              <option value="JPY">JPY (¥)</option>
+              <option value="MXN">MXN ($)</option>
+              <option value="PHP">PHP (₱)</option>
+              <option value="ZAR">ZAR (R)</option>
+            </select>
+          </label>
+          <label>Week starts on
+            <select name="weekStart">
+              <option value="1">Monday</option>
+              <option value="0">Sunday</option>
+            </select>
+          </label>
+        </div>
+        <p class="error" id="settings-error" role="alert"></p>
+        <div class="actions">
+          <button type="submit" class="primary">Save settings</button>
+          <span class="saved" id="settings-saved" aria-live="polite"></span>
+        </div>
+      </form>
+
+      <div class="card form">
+        <h2>Your data</h2>
+        <p class="muted">Everything is saved only in this browser on this device. Nothing is sent anywhere.
+          Download a backup now and then, and use it to move your data to another phone or computer.</p>
+        <div class="actions wrap">
+          <button type="button" class="secondary" id="export-json">Download backup</button>
+          <label class="secondary file-btn">Restore backup
+            <input type="file" id="import-json" accept="application/json,.json">
+          </label>
+          <button type="button" class="secondary" id="export-csv">Export spreadsheet (CSV)</button>
+        </div>
+        <p class="muted" id="data-status" aria-live="polite"></p>
+        <hr>
+        <button type="button" class="danger" id="clear-all">Delete all data</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="calc.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
