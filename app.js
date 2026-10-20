@@ -32,9 +32,11 @@
     }
   }
 
-  function saveState() {
+  // fromCloud: the change came from syncing, so don't trigger another sync.
+  function saveState(fromCloud) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      if (!fromCloud) window.dispatchEvent(new Event('moneytracker:changed'));
       return true;
     } catch (e) {
       toast('Could not save. Your browser storage may be full or turned off (e.g. private browsing).');
@@ -128,8 +130,11 @@
 
   const VIEWS = ['dashboard', 'work', 'spending', 'settings'];
 
+  let currentView = null;
   function showView(name) {
     if (VIEWS.indexOf(name) === -1) name = 'dashboard';
+    if (name === currentView) return;
+    currentView = name;
     VIEWS.forEach(function (v) {
       $('#view-' + v).hidden = v !== name;
     });
@@ -147,7 +152,7 @@
   document.querySelectorAll('.tab').forEach(function (tab) {
     tab.addEventListener('click', function () {
       location.hash = tab.dataset.view === 'dashboard' ? '' : tab.dataset.view;
-      if (tab.dataset.view === 'dashboard') routeFromHash();
+      routeFromHash(); // switch now rather than waiting for the hashchange event
       window.scrollTo(0, 0);
     });
   });
@@ -358,11 +363,14 @@
     const index = state[listName].findIndex(function (x) { return x.id === id; });
     if (index === -1) return;
     const removed = state[listName].splice(index, 1)[0];
+    state.deleted[id] = Date.now();
     if (listName === 'shifts' && editingShiftId === id) cancelShiftEdit();
     if (listName === 'expenses' && editingExpenseId === id) cancelExpenseEdit();
     saveState();
     render();
     toast(message, function () {
+      delete state.deleted[id];
+      removed.updatedAt = Date.now(); // newer than the deletion, so syncing keeps it
       state[listName].splice(Math.min(index, state[listName].length), 0, removed);
       saveState();
       render();
@@ -436,11 +444,12 @@
     $('#shift-error').textContent = '';
     if (editingShiftId) {
       const existing = state.shifts.find(function (s) { return s.id === editingShiftId; });
-      if (existing) Object.assign(existing, r.value);
+      if (existing) Object.assign(existing, r.value, { updatedAt: Date.now() });
       cancelShiftEdit();
       toast('Hours updated.' + addedOutsidePeriodNote(r.value.date));
     } else {
       r.value.id = C.newId();
+      r.value.updatedAt = Date.now();
       state.shifts.push(r.value);
       resetShiftForm(true);
       toast('Added ' + hoursText(r.value.hours) + ' · ' + money(C.shiftEarningsCents(r.value)) + addedOutsidePeriodNote(r.value.date));
@@ -529,11 +538,12 @@
     $('#expense-error').textContent = '';
     if (editingExpenseId) {
       const existing = state.expenses.find(function (x) { return x.id === editingExpenseId; });
-      if (existing) Object.assign(existing, r.value);
+      if (existing) Object.assign(existing, r.value, { updatedAt: Date.now() });
       cancelExpenseEdit();
       toast('Spending updated.' + addedOutsidePeriodNote(r.value.date));
     } else {
       r.value.id = C.newId();
+      r.value.updatedAt = Date.now();
       state.expenses.push(r.value);
       resetExpenseForm(true);
       toast('Added ' + money(r.value.amountCents) + ' for ' + r.value.category + addedOutsidePeriodNote(r.value.date));
@@ -572,6 +582,7 @@
 
   $('#spend-slider').addEventListener('input', function (e) {
     state.settings.spendPercent = Number(e.target.value);
+    state.settingsUpdatedAt = Date.now();
     saveState();
     render();
   });
@@ -609,6 +620,7 @@
     state.settings.spendPercent = Math.round(spend);
     state.settings.currency = settingsForm.currency.value;
     state.settings.weekStart = Number(settingsForm.weekStart.value);
+    state.settingsUpdatedAt = Date.now();
     const saved = saveState();
     // Update the default pay in the work form unless the user is editing a shift.
     if (!editingShiftId && C.toCents(shiftForm.rate.value) === oldRate) {
@@ -658,7 +670,7 @@
         incoming.shifts.length + ' work entries and ' + incoming.expenses.length + ' spending entries.\n\n' +
         'Your current data will be overwritten.');
       if (!ok) return;
-      state = incoming;
+      state = C.replaceAll(state, incoming, Date.now());
       cancelShiftEdit();
       cancelExpenseEdit();
       saveState();
@@ -671,9 +683,12 @@
   });
 
   $('#clear-all').addEventListener('click', function () {
-    const ok = window.confirm('Delete ALL hours, spending and settings from this device?\n\nThis cannot be undone. Download a backup first if you might want it later.');
+    const everywhere = window.MoneyCloud && window.MoneyCloud.isSignedIn();
+    const ok = window.confirm('Delete ALL hours, spending and settings ' +
+      (everywhere ? 'from your account, on every device you\'re signed in on?' : 'from this device?') +
+      '\n\nThis cannot be undone. Download a backup first if you might want it later.');
     if (!ok) return;
-    state = C.defaultState();
+    state = C.replaceAll(state, C.defaultState(), Date.now());
     cancelShiftEdit();
     cancelExpenseEdit();
     saveState();
@@ -696,6 +711,27 @@
     e.preventDefault();
     location.hash = link.dataset.goto;
   });
+
+  // ---------- Hooks used by cloud.js (sign-in and sync) ----------
+
+  window.MoneyApp = {
+    getState: function () { return state; },
+    // Replaces the data with a copy merged from the cloud (or a fresh state
+    // after signing out) and redraws everything.
+    setState: function (next) {
+      const settingsChanged = JSON.stringify(next.settings) !== JSON.stringify(state.settings);
+      state = next;
+      saveState(true);
+      if (editingShiftId && !state.shifts.some(function (x) { return x.id === editingShiftId; })) cancelShiftEdit();
+      if (editingExpenseId && !state.expenses.some(function (x) { return x.id === editingExpenseId; })) cancelExpenseEdit();
+      // Only refill the settings form when settings changed, so a background
+      // sync doesn't wipe out something being typed there.
+      if (settingsChanged) fillSettingsForm();
+      render();
+    },
+    toast: toast,
+    showView: function (name) { location.hash = name; }
+  };
 
   // ---------- Start ----------
 

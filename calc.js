@@ -200,12 +200,21 @@
     weekStart: 1
   };
 
+  /*
+   * Sync bookkeeping (used to merge data between devices):
+   *   item.updatedAt     - ms timestamp of the item's last change (0 = unknown)
+   *   deleted            - { id: ms timestamp } for deleted items ("tombstones"),
+   *                        so a deletion on one device isn't undone by another
+   *   settingsUpdatedAt  - ms timestamp of the last settings change
+   */
   function defaultState() {
     return {
       version: 1,
       settings: Object.assign({}, DEFAULT_SETTINGS),
+      settingsUpdatedAt: 0,
       shifts: [],
-      expenses: []
+      expenses: [],
+      deleted: {}
     };
   }
 
@@ -215,6 +224,10 @@
 
   function isNonNegInt(n) {
     return Number.isInteger(n) && n >= 0;
+  }
+
+  function isTimestamp(n) {
+    return typeof n === 'number' && Number.isFinite(n) && n >= 0;
   }
 
   function cleanText(v, max) {
@@ -247,7 +260,8 @@
         hours: x.hours,
         rateCents: x.rateCents,
         tipsCents: x.tipsCents || 0,
-        note: cleanText(x.note, 200)
+        note: cleanText(x.note, 200),
+        updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
       };
     });
 
@@ -260,11 +274,122 @@
         date: x.date,
         amountCents: x.amountCents,
         category: cleanText(x.category, 40) || 'Other',
-        note: cleanText(x.note, 200)
+        note: cleanText(x.note, 200),
+        updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
       };
     });
 
-    return { version: 1, settings: settings, shifts: shifts, expenses: expenses };
+    const deleted = {};
+    if (raw.deleted && typeof raw.deleted === 'object' && !Array.isArray(raw.deleted)) {
+      Object.keys(raw.deleted).sort().forEach(function (id) {
+        if (isTimestamp(raw.deleted[id])) deleted[id] = raw.deleted[id];
+      });
+    }
+
+    return {
+      version: 1,
+      settings: settings,
+      settingsUpdatedAt: isTimestamp(raw.settingsUpdatedAt) ? raw.settingsUpdatedAt : 0,
+      shifts: shifts,
+      expenses: expenses,
+      deleted: deleted
+    };
+  }
+
+  // ---- Merging data from two devices ----
+
+  // Stable order so that merge(a, b) and merge(b, a) produce identical JSON:
+  // by date, then last change, then id.
+  function compareItems(a, b) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.updatedAt !== b.updatedAt) return a.updatedAt - b.updatedAt;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  }
+
+  // Picks the newer of two versions of the same item. Exact ties are broken by
+  // content so every device makes the same choice.
+  function newerItem(a, b) {
+    if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
+    return JSON.stringify(a) >= JSON.stringify(b) ? a : b;
+  }
+
+  /*
+   * Combines two copies of the data (e.g. this device and the cloud).
+   * For each entry the most recent change wins, whether that change was an
+   * edit or a deletion. Settings come from whichever side changed them last.
+   */
+  function mergeStates(a, b) {
+    const deleted = {};
+    [a.deleted || {}, b.deleted || {}].forEach(function (d) {
+      Object.keys(d).forEach(function (id) {
+        deleted[id] = Math.max(deleted[id] || 0, d[id]);
+      });
+    });
+
+    function mergeList(listA, listB) {
+      const byId = {};
+      listA.concat(listB).forEach(function (item) {
+        byId[item.id] = byId[item.id] ? newerItem(byId[item.id], item) : item;
+      });
+      const out = [];
+      Object.keys(byId).forEach(function (id) {
+        const item = byId[id];
+        if (deleted[id] != null) {
+          if (deleted[id] >= item.updatedAt) return; // deleted after its last edit
+          delete deleted[id]; // edited (or restored) after it was deleted
+        }
+        out.push(item);
+      });
+      return out.sort(compareItems);
+    }
+
+    const shifts = mergeList(a.shifts, b.shifts);
+    const expenses = mergeList(a.expenses, b.expenses);
+
+    const aSettingsNewer = (a.settingsUpdatedAt || 0) > (b.settingsUpdatedAt || 0) ||
+      ((a.settingsUpdatedAt || 0) === (b.settingsUpdatedAt || 0) &&
+        JSON.stringify(a.settings) >= JSON.stringify(b.settings));
+    const winner = aSettingsNewer ? a : b;
+
+    const sortedDeleted = {};
+    Object.keys(deleted).sort().forEach(function (id) { sortedDeleted[id] = deleted[id]; });
+
+    return {
+      version: 1,
+      settings: Object.assign({}, winner.settings),
+      settingsUpdatedAt: winner.settingsUpdatedAt || 0,
+      shifts: shifts,
+      expenses: expenses,
+      deleted: sortedDeleted
+    };
+  }
+
+  /*
+   * Replaces all data with `incoming` (restoring a backup, or deleting
+   * everything) in a way that merging can't undo: every current entry that
+   * isn't in `incoming` gets a deletion marker, and everything in `incoming`
+   * counts as changed now.
+   */
+  function replaceAll(current, incoming, now) {
+    const deleted = Object.assign({}, current.deleted, incoming.deleted);
+    const keep = {};
+    incoming.shifts.concat(incoming.expenses).forEach(function (x) { keep[x.id] = true; });
+    current.shifts.concat(current.expenses).forEach(function (x) {
+      if (!keep[x.id]) deleted[x.id] = now;
+    });
+    Object.keys(keep).forEach(function (id) { delete deleted[id]; });
+    function stamp(x) { return Object.assign({}, x, { updatedAt: now }); }
+    return mergeStates(
+      {
+        version: 1,
+        settings: Object.assign({}, incoming.settings),
+        settingsUpdatedAt: now,
+        shifts: incoming.shifts.map(stamp),
+        expenses: incoming.expenses.map(stamp),
+        deleted: deleted
+      },
+      C_EMPTY
+    );
   }
 
   function newId() {
@@ -296,6 +421,8 @@
     return rows.map(function (r) { return r.join(','); }).join('\r\n') + '\r\n';
   }
 
+  const C_EMPTY = { settings: DEFAULT_SETTINGS, settingsUpdatedAt: -1, shifts: [], expenses: [], deleted: {} };
+
   const api = {
     toCents: toCents,
     centsToInput: centsToInput,
@@ -313,6 +440,8 @@
     hoursOfWork: hoursOfWork,
     defaultState: defaultState,
     validateState: validateState,
+    mergeStates: mergeStates,
+    replaceAll: replaceAll,
     newId: newId,
     toCsv: toCsv,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS

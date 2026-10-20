@@ -334,3 +334,24 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   cursor: pointer; padding: 4px; text-transform: uppercase; letter-spacing: 0.03em;
 }
 @media (min-width: 760px) { .toast { bottom: 24px; } }
+
+/* ---------- Account ---------- */
+
+input[type="email"], input[type="password"] {
+  display: block; width: 100%; margin-top: 4px; padding: 10px 12px; min-height: 44px;
+  font: inherit; font-weight: 400; color: var(--text); background: var(--input-bg);
+  border: 1px solid var(--border); border-radius: 10px;
+}
+.google-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 44px; padding: 10px 16px;
+  font: inherit; font-weight: 600; cursor: pointer;
+  background: #ffffff; color: #1f1f1f; border: 1px solid #747775; border-radius: 10px;
+}
+.divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.85rem; margin: 16px 0; }
+.divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.ok-text { color: var(--accent); font-size: 0.9rem; margin: 0 0 8px; }
+.ok-text:empty { display: none; }
+.sync-status { color: var(--muted); font-size: 0.9rem; }
+.sync-status.problem { color: var(--danger); }
+#account-card .link-btn { min-height: 44px; }

@@ -118,8 +118,11 @@ test('summarize flags spending with no income as fully used', () => {
 });
 
 test('validateState accepts its own output and rejects bad data', () => {
-  const s = sampleState();
+  const s = C.validateState(sampleState());
   assert.deepEqual(C.validateState(JSON.parse(JSON.stringify(s))), s);
+  assert.equal(s.shifts[0].updatedAt, 0); // older data without sync fields still loads
+  assert.deepEqual(s.deleted, {});
+  assert.deepEqual(C.validateState({ settings: {}, shifts: [], expenses: [], deleted: { a: 5, b: 'x', c: -1 } }).deleted, { a: 5 });
   assert.throws(() => C.validateState(null));
   assert.throws(() => C.validateState({ settings: {}, shifts: [], expenses: 'x' }));
   assert.throws(() => C.validateState({ settings: {}, shifts: [{ date: '2026-01-01', hours: -1, rateCents: 1 }], expenses: [] }), /Work entry #1/);
@@ -145,4 +148,71 @@ test('CSV export quotes text and neutralizes formulas', () => {
 test('hoursOfWork', () => {
   assert.equal(C.hoursOfWork(3000, 1500), 2);
   assert.equal(C.hoursOfWork(3000, 0), null);
+});
+
+// ---- Sync merging ----
+
+function item(id, date, updatedAt, amountCents) {
+  return { id: id, date: date, amountCents: amountCents || 100, category: 'Food', note: '', updatedAt: updatedAt };
+}
+function st(expenses, deleted, settingsUpdatedAt, spendPercent) {
+  const s = C.defaultState();
+  s.expenses = expenses;
+  s.deleted = deleted || {};
+  s.settingsUpdatedAt = settingsUpdatedAt || 0;
+  if (spendPercent != null) s.settings.spendPercent = spendPercent;
+  return s;
+}
+
+test('merge combines entries from both devices', () => {
+  const m = C.mergeStates(st([item('a', '2026-10-01', 1)]), st([item('b', '2026-10-02', 2)]));
+  assert.deepEqual(m.expenses.map(e => e.id), ['a', 'b']);
+});
+
+test('merge keeps the most recent edit of the same entry', () => {
+  const m = C.mergeStates(st([item('a', '2026-10-01', 10, 500)]), st([item('a', '2026-10-01', 20, 700)]));
+  assert.equal(m.expenses.length, 1);
+  assert.equal(m.expenses[0].amountCents, 700);
+});
+
+test('a deletion on one device removes the entry everywhere', () => {
+  const m = C.mergeStates(st([], { a: 30 }), st([item('a', '2026-10-01', 10)]));
+  assert.deepEqual(m.expenses, []);
+  assert.deepEqual(m.deleted, { a: 30 });
+});
+
+test('an edit made after a deletion brings the entry back (e.g. Undo)', () => {
+  const m = C.mergeStates(st([item('a', '2026-10-01', 40)]), st([], { a: 30 }));
+  assert.equal(m.expenses.length, 1);
+  assert.deepEqual(m.deleted, {});
+});
+
+test('merge is order independent and repeatable', () => {
+  const a = st([item('a', '2026-10-03', 5), item('x', '2026-10-01', 9, 1)], { z: 3 }, 50, 30);
+  const b = st([item('b', '2026-10-01', 7), item('x', '2026-10-01', 9, 2)], { y: 4 }, 60, 70);
+  const ab = C.mergeStates(a, b);
+  const ba = C.mergeStates(b, a);
+  assert.equal(JSON.stringify(ab), JSON.stringify(ba));
+  assert.equal(JSON.stringify(C.mergeStates(ab, b)), JSON.stringify(ab));
+  assert.equal(ab.settings.spendPercent, 70); // newer settings win
+  assert.deepEqual(ab.expenses.map(e => e.id), ['b', 'x', 'a']);
+  assert.deepEqual(Object.keys(ab.deleted), ['y', 'z']);
+});
+
+test('replaceAll (restore backup / delete everything) survives a merge with old copies', () => {
+  const cloud = st([item('a', '2026-10-01', 10), item('b', '2026-10-02', 10)], {}, 5, 40);
+  // Restore a backup that only contains "b" (an older version of it).
+  const backup = st([item('b', '2026-10-02', 1, 999)], {}, 1, 80);
+  const local = C.replaceAll(cloud, backup, 100);
+  assert.deepEqual(local.expenses.map(e => [e.id, e.amountCents, e.updatedAt]), [['b', 999, 100]]);
+  assert.deepEqual(local.deleted, { a: 100 });
+  // Another device still has the old data; merging must not undo the restore.
+  const merged = C.mergeStates(cloud, local);
+  assert.deepEqual(merged.expenses.map(e => [e.id, e.amountCents]), [['b', 999]]);
+  assert.equal(merged.settings.spendPercent, 80);
+
+  const wiped = C.replaceAll(cloud, C.defaultState(), 200);
+  const merged2 = C.mergeStates(cloud, wiped);
+  assert.deepEqual(merged2.expenses, []);
+  assert.equal(merged2.settings.spendPercent, 50);
 });
