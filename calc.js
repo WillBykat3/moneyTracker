@@ -140,6 +140,7 @@
     const settings = state.settings;
     const shifts = state.shifts.filter(function (s) { return inRange(s.date, range); });
     const expenses = state.expenses.filter(function (e) { return inRange(e.date, range); });
+    const incomes = (state.incomes || []).filter(function (x) { return inRange(x.date, range); });
 
     let hours = 0;
     let gross = 0;
@@ -149,8 +150,14 @@
     });
     hours = Math.round(hours * 100) / 100;
 
+    // Other income (refunds, gifts, side jobs...) is entered as the amount
+    // actually received, so the tax estimate only applies to wages.
+    let otherIncome = 0;
+    incomes.forEach(function (x) { otherIncome += x.amountCents; });
+
     const taxes = percentOf(gross, settings.taxPercent);
-    const takeHome = gross - taxes;
+    const wageTakeHome = gross - taxes;
+    const takeHome = wageTakeHome + otherIncome;
     const spendable = percentOf(takeHome, settings.spendPercent);
     const savings = takeHome - spendable;
 
@@ -168,6 +175,8 @@
     return {
       shiftCount: shifts.length,
       expenseCount: expenses.length,
+      incomeCount: incomes.length,
+      otherIncome: otherIncome,
       hours: hours,
       gross: gross,
       taxes: taxes,
@@ -178,10 +187,53 @@
       remaining: spendable - spent,
       // Share of the spendable budget already used (can exceed 100).
       usedPercent: spendable > 0 ? (spent / spendable) * 100 : (spent > 0 ? Infinity : 0),
-      // Take-home pay per hour worked, in cents (0 if no hours).
-      takeHomePerHour: hours > 0 ? Math.round(takeHome / hours) : 0,
+      // Take-home pay per hour worked (wages only), in cents (0 if no hours).
+      takeHomePerHour: hours > 0 ? Math.round(wageTakeHome / hours) : 0,
       byCategory: byCategory
     };
+  }
+
+  /*
+   * Money in and out of each account for a date range.
+   *   in  = estimated take-home of shifts deposited there + other income
+   *   out = spending paid from there
+   * Entries without an account (or whose account was deleted) are grouped
+   * under id '' so totals always add up.
+   */
+  function accountSummary(state, range) {
+    const known = {};
+    (state.accounts || []).forEach(function (a) { known[a.id] = true; });
+    const groups = {};
+    function group(id) {
+      const key = id && known[id] ? id : '';
+      if (!groups[key]) groups[key] = { gross: 0, other: 0, out: 0, count: 0 };
+      return groups[key];
+    }
+    state.shifts.forEach(function (s) {
+      if (!inRange(s.date, range)) return;
+      const g = group(s.accountId);
+      g.gross += shiftEarningsCents(s);
+      g.count++;
+    });
+    (state.incomes || []).forEach(function (x) {
+      if (!inRange(x.date, range)) return;
+      const g = group(x.accountId);
+      g.other += x.amountCents;
+      g.count++;
+    });
+    state.expenses.forEach(function (e) {
+      if (!inRange(e.date, range)) return;
+      const g = group(e.accountId);
+      g.out += e.amountCents;
+      g.count++;
+    });
+    const rows = (state.accounts || []).map(function (a) { return { id: a.id, name: a.name }; });
+    if (groups['']) rows.push({ id: '', name: '' });
+    return rows.map(function (r) {
+      const g = groups[r.id] || { gross: 0, other: 0, out: 0, count: 0 };
+      const moneyIn = g.gross - percentOf(g.gross, state.settings.taxPercent) + g.other;
+      return { id: r.id, name: r.name, moneyIn: moneyIn, moneyOut: g.out, net: moneyIn - g.out, count: g.count };
+    });
   }
 
   // How many hours of work an expense costs at a given take-home hourly rate.
@@ -191,6 +243,10 @@
   }
 
   // ---- Data validation (used when loading saved data and importing) ----
+
+  // Bumped when the saved data gains new kinds of information. An older copy
+  // of the app refuses to sync data from a newer one rather than drop fields.
+  const DATA_VERSION = 2;
 
   const DEFAULT_SETTINGS = {
     hourlyRateCents: 1500,
@@ -209,11 +265,13 @@
    */
   function defaultState() {
     return {
-      version: 1,
+      version: DATA_VERSION,
       settings: Object.assign({}, DEFAULT_SETTINGS),
       settingsUpdatedAt: 0,
       shifts: [],
       expenses: [],
+      incomes: [],
+      accounts: [],
       deleted: {}
     };
   }
@@ -240,6 +298,11 @@
     if (!Array.isArray(raw.shifts) || !Array.isArray(raw.expenses) || !raw.settings) {
       throw new Error('Backup is missing shifts, expenses or settings.');
     }
+    if (typeof raw.version === 'number' && raw.version > DATA_VERSION) {
+      const err = new Error('This data was saved by a newer version of the app. Reload the page to update.');
+      err.code = 'NEWER_VERSION';
+      throw err;
+    }
     const s = raw.settings;
     const settings = {
       hourlyRateCents: isNonNegInt(s.hourlyRateCents) ? s.hourlyRateCents : DEFAULT_SETTINGS.hourlyRateCents,
@@ -261,6 +324,7 @@
         rateCents: x.rateCents,
         tipsCents: x.tipsCents || 0,
         note: cleanText(x.note, 200),
+        accountId: cleanText(x.accountId, 64),
         updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
       };
     });
@@ -275,6 +339,32 @@
         amountCents: x.amountCents,
         category: cleanText(x.category, 40) || 'Other',
         note: cleanText(x.note, 200),
+        accountId: cleanText(x.accountId, 64),
+        updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
+      };
+    });
+
+    const incomes = (Array.isArray(raw.incomes) ? raw.incomes : []).map(function (x, i) {
+      if (!x || !parseDate(x.date) || !isNonNegInt(x.amountCents) || x.amountCents === 0) {
+        throw new Error('Other income entry #' + (i + 1) + ' is invalid.');
+      }
+      return {
+        id: String(x.id || newId()),
+        date: x.date,
+        amountCents: x.amountCents,
+        source: cleanText(x.source, 40) || 'Other',
+        note: cleanText(x.note, 200),
+        accountId: cleanText(x.accountId, 64),
+        updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
+      };
+    });
+
+    const accounts = (Array.isArray(raw.accounts) ? raw.accounts : []).map(function (x, i) {
+      const name = x && typeof x.name === 'string' ? x.name.trim().slice(0, 40) : '';
+      if (!name) throw new Error('Account #' + (i + 1) + ' has no name.');
+      return {
+        id: String(x.id || newId()),
+        name: name,
         updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
       };
     });
@@ -287,11 +377,13 @@
     }
 
     return {
-      version: 1,
+      version: DATA_VERSION,
       settings: settings,
       settingsUpdatedAt: isTimestamp(raw.settingsUpdatedAt) ? raw.settingsUpdatedAt : 0,
       shifts: shifts,
       expenses: expenses,
+      incomes: incomes,
+      accounts: accounts,
       deleted: deleted
     };
   }
@@ -302,6 +394,7 @@
   // by date, then last change, then id.
   function compareItems(a, b) {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.name !== b.name) return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; // accounts
     if (a.updatedAt !== b.updatedAt) return a.updatedAt - b.updatedAt;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   }
@@ -327,6 +420,8 @@
     });
 
     function mergeList(listA, listB) {
+      listA = listA || [];
+      listB = listB || [];
       const byId = {};
       listA.concat(listB).forEach(function (item) {
         byId[item.id] = byId[item.id] ? newerItem(byId[item.id], item) : item;
@@ -345,6 +440,8 @@
 
     const shifts = mergeList(a.shifts, b.shifts);
     const expenses = mergeList(a.expenses, b.expenses);
+    const incomes = mergeList(a.incomes, b.incomes);
+    const accounts = mergeList(a.accounts, b.accounts);
 
     const aSettingsNewer = (a.settingsUpdatedAt || 0) > (b.settingsUpdatedAt || 0) ||
       ((a.settingsUpdatedAt || 0) === (b.settingsUpdatedAt || 0) &&
@@ -355,11 +452,13 @@
     Object.keys(deleted).sort().forEach(function (id) { sortedDeleted[id] = deleted[id]; });
 
     return {
-      version: 1,
+      version: DATA_VERSION,
       settings: Object.assign({}, winner.settings),
       settingsUpdatedAt: winner.settingsUpdatedAt || 0,
       shifts: shifts,
       expenses: expenses,
+      incomes: incomes,
+      accounts: accounts,
       deleted: sortedDeleted
     };
   }
@@ -372,20 +471,24 @@
    */
   function replaceAll(current, incoming, now) {
     const deleted = Object.assign({}, current.deleted, incoming.deleted);
+    function everything(st) {
+      return st.shifts.concat(st.expenses, st.incomes || [], st.accounts || []);
+    }
     const keep = {};
-    incoming.shifts.concat(incoming.expenses).forEach(function (x) { keep[x.id] = true; });
-    current.shifts.concat(current.expenses).forEach(function (x) {
+    everything(incoming).forEach(function (x) { keep[x.id] = true; });
+    everything(current).forEach(function (x) {
       if (!keep[x.id]) deleted[x.id] = now;
     });
     Object.keys(keep).forEach(function (id) { delete deleted[id]; });
     function stamp(x) { return Object.assign({}, x, { updatedAt: now }); }
     return mergeStates(
       {
-        version: 1,
         settings: Object.assign({}, incoming.settings),
         settingsUpdatedAt: now,
         shifts: incoming.shifts.map(stamp),
         expenses: incoming.expenses.map(stamp),
+        incomes: (incoming.incomes || []).map(stamp),
+        accounts: (incoming.accounts || []).map(stamp),
         deleted: deleted
       },
       C_EMPTY
@@ -410,18 +513,24 @@
   }
 
   function toCsv(state) {
-    const rows = [['type', 'date', 'hours', 'hourly_rate', 'tips', 'amount', 'category', 'note']];
+    const names = {};
+    (state.accounts || []).forEach(function (a) { names[a.id] = a.name; });
+    function account(x) { return csvCell(names[x.accountId] || ''); }
+    const rows = [['type', 'date', 'hours', 'hourly_rate', 'tips', 'amount', 'category', 'note', 'account']];
     state.shifts.forEach(function (s) {
       rows.push(['work', s.date, s.hours, centsToInput(s.rateCents), centsToInput(s.tipsCents || 0),
-        centsToInput(shiftEarningsCents(s)), '', csvCell(s.note)]);
+        centsToInput(shiftEarningsCents(s)), '', csvCell(s.note), account(s)]);
+    });
+    (state.incomes || []).forEach(function (x) {
+      rows.push(['income', x.date, '', '', '', centsToInput(x.amountCents), csvCell(x.source), csvCell(x.note), account(x)]);
     });
     state.expenses.forEach(function (e) {
-      rows.push(['expense', e.date, '', '', '', centsToInput(e.amountCents), csvCell(e.category), csvCell(e.note)]);
+      rows.push(['expense', e.date, '', '', '', centsToInput(e.amountCents), csvCell(e.category), csvCell(e.note), account(e)]);
     });
     return rows.map(function (r) { return r.join(','); }).join('\r\n') + '\r\n';
   }
 
-  const C_EMPTY = { settings: DEFAULT_SETTINGS, settingsUpdatedAt: -1, shifts: [], expenses: [], deleted: {} };
+  const C_EMPTY = { settings: DEFAULT_SETTINGS, settingsUpdatedAt: -1, shifts: [], expenses: [], incomes: [], accounts: [], deleted: {} };
 
   const api = {
     toCents: toCents,
@@ -437,6 +546,7 @@
     stepPeriod: stepPeriod,
     inRange: inRange,
     summarize: summarize,
+    accountSummary: accountSummary,
     hoursOfWork: hoursOfWork,
     defaultState: defaultState,
     validateState: validateState,
@@ -444,7 +554,8 @@
     replaceAll: replaceAll,
     newId: newId,
     toCsv: toCsv,
-    DEFAULT_SETTINGS: DEFAULT_SETTINGS
+    DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    DATA_VERSION: DATA_VERSION
   };
 
   if (typeof module !== 'undefined' && module.exports) {

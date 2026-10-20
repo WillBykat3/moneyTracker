@@ -24,6 +24,42 @@ installed on a phone's home screen, where it opens full-screen like an app and w
 
 When you type in a purchase, the app also shows roughly how many hours of work it costs at your usual take-home pay.
 
+**Other income** (refunds, gifts, side jobs, interest) is entered as the amount you actually received. It adds to
+take-home pay without the tax estimate.
+
+## Accounts
+
+Under **Settings → Bank accounts & cards**, add nicknames for where your money lives (e.g. "Chase Checking",
+"Savings", "Visa"). Never enter account numbers; the app refuses names that look like one. Then:
+
+- Hours and other income have a **Deposited to** account; purchases have a **Paid from** account. Each form remembers
+  the last account you picked.
+- The Overview shows money **in**, **out** and the **net** for each account in the selected period. Money in from hours
+  is your *estimated* take-home pay. Transfers between your own accounts aren't tracked.
+- Deleting an account keeps its entries; they show as "No account".
+
+## Importing bank statements (PDF or CSV)
+
+On the **Spending** tab, **Import a bank statement** reads a PDF statement or a CSV export from your bank or card
+**on your device**. The file isn't uploaded or stored anywhere. You then review every transaction before anything is added:
+
+- Categories are guessed from the description (e.g. Starbucks → Food, Shell → Gas) and can be changed.
+- Paychecks (`DIRECT DEP`, `PAYROLL`...) come in unticked, because your pay is already counted from the hours you log.
+- Transfers and credit card payments come in unticked, because they move money between your own accounts.
+- Anything with the same date and amount as an existing entry is flagged as a possible duplicate and unticked.
+- If spending and income come out backwards (common with credit card exports), tap **Swap**.
+- Password-protected PDFs ask for the password, which also stays on the device.
+
+Limits, honestly: every bank lays out its PDFs differently, so PDF reading is best-effort. Scanned (image-only) PDFs
+can't be read. **CSV exports are more reliable**, and almost every bank offers one, usually under "Download
+transactions". Numeric dates are read as US month/day.
+
+### Why there's no ADP connection
+
+ADP's APIs are only available to employers and their approved partners through registered integrations. An employee
+can't get access for a personal app. You can still sign in to MyADP to see your hours and pay stubs, and use the
+bank import above to pull in what actually landed in your account.
+
 Money is stored as whole cents, so totals never pick up floating point errors (like `0.1 + 0.2 = 0.30000000000000004`).
 
 ## Your data
@@ -148,7 +184,8 @@ npm test
 ```
 
 Unit tests cover the money math, rounding, overnight shifts, week/month/year date ranges (leap years, daylight
-saving changes, year boundaries), backup validation, CSV export, and merging data between devices.
+saving changes, year boundaries), backup validation, CSV export, merging data between devices, accounts and other
+income, and reading bank statements (several CSV layouts and PDF text).
 
 ## Files
 
@@ -160,6 +197,8 @@ saving changes, year boundaries), backup validation, CSV export, and merging dat
 | `app.js` | Forms, lists, dashboard, saving, backup/restore |
 | `config.js` | Your Supabase project URL and publishable key (empty = no accounts) |
 | `cloud.js` | Sign-in (Google, email) and syncing with Supabase |
+| `importer.js` | Reads bank statement CSVs and PDF text into transactions for review (no UI code, so it's tested) |
+| `vendor/pdfjs/` | Mozilla pdf.js v6.3.289 (Apache-2.0), loaded only when you import a PDF |
 | `supabase/schema.sql` | Database table and security rules, run once in Supabase |
 | `vendor/supabase.js` | Supabase's JavaScript library v2.117.2 (bundled so the app works offline) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and the installable app |

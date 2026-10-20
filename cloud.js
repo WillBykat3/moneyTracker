@@ -23,7 +23,7 @@
   let session = null;
   window.MoneyCloud = { isSignedIn: function () { return !!session; } };
 
-  if (!cfg.supabaseUrl || !cfg.supabaseKey) return;
+  if (!cfg.supabaseUrl || !cfg.supabaseKey || !app) return;
 
   $('#account-card').hidden = false;
 
@@ -270,7 +270,9 @@
           try {
             remote = C.validateState(res.data.data);
           } catch (e) {
-            // Never overwrite cloud data we can't read.
+            // Never overwrite cloud data we can't read (or that a newer version
+            // of the app saved with information this copy doesn't know about).
+            if (e.code === 'NEWER_VERSION') throw new Error('another device has a newer version of the app. Reload this page to update.');
             throw new Error('the data in your account looks damaged (' + e.message + '). Nothing was changed.');
           }
         }

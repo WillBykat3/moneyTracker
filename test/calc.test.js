@@ -140,9 +140,13 @@ test('CSV export quotes text and neutralizes formulas', () => {
   s.shifts.push({ id: 'a', date: '2026-10-05', hours: 7.5, rateCents: 1525, tipsCents: 0, note: 'Closing, late' });
   s.expenses.push({ id: 'x', date: '2026-10-06', amountCents: 1999, category: 'Food', note: '=HYPERLINK("x")' });
   const lines = C.toCsv(s).trim().split('\r\n');
-  assert.equal(lines[0], 'type,date,hours,hourly_rate,tips,amount,category,note');
-  assert.equal(lines[1], 'work,2026-10-05,7.5,15.25,0.00,114.38,,"Closing, late"');
-  assert.equal(lines[2], 'expense,2026-10-06,,,,19.99,Food,"\'=HYPERLINK(""x"")"');
+  assert.equal(lines[0], 'type,date,hours,hourly_rate,tips,amount,category,note,account');
+  assert.equal(lines[1], 'work,2026-10-05,7.5,15.25,0.00,114.38,,"Closing, late",');
+  assert.equal(lines[2], 'expense,2026-10-06,,,,19.99,Food,"\'=HYPERLINK(""x"")",');
+  s.accounts.push({ id: 'acc', name: 'Chase, Checking', updatedAt: 1 });
+  s.incomes.push({ id: 'i', date: '2026-10-07', amountCents: 500, source: 'Refund', note: '', accountId: 'acc', updatedAt: 1 });
+  const lines2 = C.toCsv(s).trim().split('\r\n');
+  assert.equal(lines2[2], 'income,2026-10-07,,,,5.00,Refund,,"Chase, Checking"');
 });
 
 test('hoursOfWork', () => {
@@ -215,4 +219,73 @@ test('replaceAll (restore backup / delete everything) survives a merge with old 
   const merged2 = C.mergeStates(cloud, wiped);
   assert.deepEqual(merged2.expenses, []);
   assert.equal(merged2.settings.spendPercent, 50);
+});
+
+// ---- Accounts and other income ----
+
+function moneyState() {
+  const s = C.defaultState();
+  s.settings.taxPercent = 10;
+  s.settings.spendPercent = 50;
+  s.accounts = [{ id: 'chk', name: 'Checking', updatedAt: 1 }, { id: 'visa', name: 'Visa', updatedAt: 1 }];
+  s.shifts.push({ id: 'a', date: '2026-10-05', hours: 10, rateCents: 2000, tipsCents: 0, note: '', accountId: 'chk', updatedAt: 1 });
+  s.shifts.push({ id: 'b', date: '2026-10-06', hours: 5, rateCents: 2000, tipsCents: 0, note: '', accountId: '', updatedAt: 1 });
+  s.incomes.push({ id: 'i', date: '2026-10-07', amountCents: 3000, source: 'Gift', note: '', accountId: 'chk', updatedAt: 1 });
+  s.expenses.push({ id: 'x', date: '2026-10-08', amountCents: 4500, category: 'Food', note: '', accountId: 'visa', updatedAt: 1 });
+  s.expenses.push({ id: 'y', date: '2026-10-09', amountCents: 1000, category: 'Food', note: '', accountId: 'gone', updatedAt: 1 });
+  return s;
+}
+
+test('other income adds to take-home without the tax estimate', () => {
+  const sum = C.summarize(moneyState(), { start: null, end: null });
+  assert.equal(sum.gross, 30000);
+  assert.equal(sum.taxes, 3000);
+  assert.equal(sum.otherIncome, 3000);
+  assert.equal(sum.takeHome, 30000);        // 270 wages after tax + 30 gift
+  assert.equal(sum.spendable, 15000);
+  assert.equal(sum.takeHomePerHour, 1800);  // wages only: 270 / 15h
+});
+
+test('accountSummary splits money in and out by account; unknown accounts are grouped', () => {
+  const rows = C.accountSummary(moneyState(), { start: null, end: null });
+  assert.deepEqual(rows.map(r => [r.id, r.moneyIn, r.moneyOut, r.net]), [
+    ['chk', 18000 + 3000, 0, 21000],   // 200 gross - 10% = 180, + 30 gift
+    ['visa', 0, 4500, -4500],
+    ['', 9000, 1000, 8000]             // shift with no account + spending from a deleted account
+  ]);
+  const total = rows.reduce((t, r) => t + r.moneyIn, 0);
+  assert.equal(total, C.summarize(moneyState(), { start: null, end: null }).takeHome);
+});
+
+test('validateState keeps accounts, income and account links', () => {
+  const v = C.validateState(JSON.parse(JSON.stringify(moneyState())));
+  assert.equal(v.version, C.DATA_VERSION);
+  assert.equal(v.accounts.length, 2);
+  assert.equal(v.incomes[0].source, 'Gift');
+  assert.equal(v.shifts[0].accountId, 'chk');
+  assert.equal(v.expenses[0].accountId, 'visa');
+  assert.throws(() => C.validateState(Object.assign(moneyState(), { accounts: [{ id: 'z', name: '  ' }] })), /Account #1/);
+  assert.throws(() => C.validateState(Object.assign(moneyState(), { incomes: [{ date: '2026-01-01', amountCents: 0 }] })), /Other income entry #1/);
+});
+
+test('data from a newer app version is refused instead of silently losing fields', () => {
+  const newer = Object.assign(moneyState(), { version: C.DATA_VERSION + 1 });
+  assert.throws(() => C.validateState(newer), err => err.code === 'NEWER_VERSION');
+});
+
+test('merge and replaceAll handle accounts and other income', () => {
+  const a = moneyState();
+  const b = moneyState();
+  b.accounts[0] = { id: 'chk', name: 'Chase Checking', updatedAt: 5 };   // renamed on device B
+  b.incomes = [];
+  b.deleted = { i: 9 };                                                   // income deleted on B
+  a.accounts.push({ id: 'sav', name: 'Savings', updatedAt: 3 });          // added on A
+  const m = C.mergeStates(a, b);
+  assert.deepEqual(m.accounts.map(x => x.name), ['Chase Checking', 'Savings', 'Visa']);
+  assert.deepEqual(m.incomes, []);
+  assert.equal(JSON.stringify(m), JSON.stringify(C.mergeStates(b, a)));
+
+  const wiped = C.replaceAll(m, C.defaultState(), 100);
+  const back = C.mergeStates(m, wiped);
+  assert.deepEqual([back.accounts, back.incomes, back.shifts, back.expenses], [[], [], [], []]);
 });

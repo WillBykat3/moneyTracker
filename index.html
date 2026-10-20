@@ -13,7 +13,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Money">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <header class="topbar">
@@ -93,6 +93,12 @@
         <div id="category-breakdown"></div>
       </div>
 
+      <div class="card" id="account-breakdown-card" hidden>
+        <h2>By account</h2>
+        <div id="account-breakdown"></div>
+        <p class="muted small">Money in from hours is your estimated take-home pay.</p>
+      </div>
+
     </section>
 
     <!-- ================= WORK ================= -->
@@ -123,6 +129,10 @@
             <input type="text" name="tips" inputmode="decimal" placeholder="0.00" autocomplete="off">
           </label>
         </div>
+        <label>Deposited to
+          <select name="account" class="account-select"></select>
+          <small class="no-accounts-hint">Add your bank accounts and cards in <a href="#settings" data-goto="settings">Settings</a> to track where money goes.</small>
+        </label>
         <label>Note (optional)
           <input type="text" name="note" maxlength="200" placeholder="e.g. Saturday shift" autocomplete="off">
         </label>
@@ -137,6 +147,42 @@
       <div class="card">
         <h2>Hours in this period</h2>
         <ul class="entries" id="shift-list"></ul>
+      </div>
+
+      <form id="income-form" class="card form" novalidate>
+        <h2 id="income-form-title">Other income</h2>
+        <p class="muted small">Money that isn't from the hours above, like a refund, gift, or side job. Enter the amount you actually received.</p>
+        <div class="row">
+          <label>Date
+            <input type="date" name="date" required>
+          </label>
+          <label>Amount
+            <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off">
+          </label>
+        </div>
+        <label>Where it came from
+          <input type="text" name="source" list="source-options" maxlength="40" placeholder="e.g. Refund" autocomplete="off">
+          <datalist id="source-options">
+            <option value="Refund"><option value="Gift"><option value="Side job"><option value="Transfer in">
+            <option value="Interest"><option value="Deposit"><option value="Other">
+          </datalist>
+        </label>
+        <label>Deposited to
+          <select name="account" class="account-select"></select>
+        </label>
+        <label>Note (optional)
+          <input type="text" name="note" maxlength="200" autocomplete="off">
+        </label>
+        <p class="error" id="income-error" role="alert"></p>
+        <div class="actions">
+          <button type="submit" class="primary" id="income-submit">Add income</button>
+          <button type="button" class="secondary" id="income-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>Other income in this period</h2>
+        <ul class="entries" id="income-list"></ul>
       </div>
     </section>
 
@@ -156,6 +202,10 @@
           <input type="text" name="category" list="category-options" maxlength="40" placeholder="Pick or type one" autocomplete="off">
           <datalist id="category-options"></datalist>
         </label>
+        <label>Paid from
+          <select name="account" class="account-select"></select>
+          <small class="no-accounts-hint">Add your bank accounts and cards in <a href="#settings" data-goto="settings">Settings</a> to track where money goes.</small>
+        </label>
         <label>Note (optional)
           <input type="text" name="note" maxlength="200" placeholder="e.g. Lunch with friends" autocomplete="off">
         </label>
@@ -166,6 +216,33 @@
           <button type="button" class="secondary" id="expense-cancel" hidden>Cancel edit</button>
         </div>
       </form>
+
+      <div class="card form" id="import-card">
+        <h2>Import a bank statement</h2>
+        <p class="muted small">Upload a PDF statement or a CSV file from your bank or card. It's read on this device only.
+          The file isn't uploaded or saved, and you check every transaction before anything is added.</p>
+        <label class="secondary file-btn">Choose PDF or CSV
+          <input type="file" id="statement-file" accept=".pdf,.csv,application/pdf,text/csv">
+        </label>
+        <p class="muted" id="import-status" aria-live="polite"></p>
+        <div id="import-review" hidden>
+          <div class="row">
+            <label>These transactions are from
+              <select id="import-account" class="account-select"></select>
+            </label>
+            <div class="import-tools">
+              <button type="button" class="link-btn" id="import-swap">Spending and income backwards? Swap</button>
+              <button type="button" class="link-btn" id="import-toggle-all">Select all</button>
+            </div>
+          </div>
+          <ul class="import-list" id="import-list"></ul>
+          <p class="error" id="import-error" role="alert"></p>
+          <div class="actions wrap">
+            <button type="button" class="primary" id="import-confirm">Import</button>
+            <button type="button" class="secondary" id="import-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
 
       <div class="card">
         <h2>Spending in this period</h2>
@@ -223,6 +300,18 @@
             <button type="button" class="secondary" id="sign-out">Sign out</button>
           </div>
         </div>
+      </div>
+
+      <div class="card form" id="accounts-card">
+        <h2>Bank accounts &amp; cards</h2>
+        <p class="muted small">Add the places your money goes in and out of, like checking, savings, a credit card or cash.
+          Just a nickname. Never enter account numbers.</p>
+        <ul class="entries" id="accounts-list"></ul>
+        <form id="account-form" class="inline-form" novalidate>
+          <input type="text" name="name" maxlength="40" placeholder="e.g. Chase Checking" autocomplete="off" aria-label="New account name">
+          <button type="submit" class="secondary">Add</button>
+        </form>
+        <p class="error" id="account-error" role="alert"></p>
       </div>
 
       <form id="settings-form" class="card form" novalidate>
@@ -290,10 +379,11 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="config.js"></script>
-  <script src="calc.js"></script>
-  <script src="app.js"></script>
-  <script src="vendor/supabase.js"></script>
-  <script src="cloud.js"></script>
+  <script src="config.js?v=3"></script>
+  <script src="calc.js?v=3"></script>
+  <script src="importer.js?v=3"></script>
+  <script src="app.js?v=3"></script>
+  <script src="vendor/supabase.js?v=3"></script>
+  <script src="cloud.js?v=3"></script>
 </body>
 </html>

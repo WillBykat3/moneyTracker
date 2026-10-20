@@ -355,3 +355,32 @@ input[type="email"], input[type="password"] {
 .sync-status { color: var(--muted); font-size: 0.9rem; }
 .sync-status.problem { color: var(--danger); }
 #account-card .link-btn { min-height: 44px; }
+
+/* ---------- Accounts, other income, statement import ---------- */
+
+.small { font-size: 0.85rem; }
+.no-accounts-hint a { color: var(--accent); }
+.inline-form { display: flex; gap: 8px; align-items: stretch; margin-top: 8px; }
+.inline-form input { flex: 1; margin-top: 0; min-width: 0; }
+.account-entry { grid-template-areas: "main actions"; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+
+.acct-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.acct-row:last-child { border-bottom: 0; }
+.acct-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.acct-figures { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+.acct-in { color: var(--accent); }
+.acct-out { color: var(--muted); }
+.acct-net { font-weight: 700; }
+.acct-net.negative { color: var(--danger); }
+
+.import-tools { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; }
+.import-list { list-style: none; margin: 8px 0 12px; padding: 0; }
+.import-row { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.import-row.excluded { opacity: 0.6; }
+.import-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.import-top input[type="checkbox"] { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--accent); }
+.import-main { min-width: 0; }
+.import-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.import-controls select, .import-controls input { margin-top: 0; }
+.import-reason { margin: 8px 0 0; font-size: 0.82rem; color: var(--warn); }
+.income-amount { color: var(--accent); }
