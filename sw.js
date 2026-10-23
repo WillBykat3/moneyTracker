@@ -4,7 +4,7 @@
  * falling back to the cached copy when offline.
  * Bump CACHE when the list of files changes.
  */
-const CACHE = 'money-tracker-v3';
+const CACHE = 'money-tracker-v4';
 const FILES = [
   './',
   'index.html',
@@ -12,6 +12,7 @@ const FILES = [
   'config.js',
   'calc.js',
   'importer.js',
+  'files.js',
   'app.js',
   'cloud.js',
   'vendor/supabase.js',

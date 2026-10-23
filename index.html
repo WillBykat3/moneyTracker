@@ -3,85 +3,87 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Money Tracker</title>
-  <meta name="description" content="Track hours worked, money earned, and how much you can spend.">
-  <meta name="theme-color" content="#0f766e">
+  <title>Payday</title>
+  <meta name="description" content="Track your hours, pay and spending, and know what you can spend.">
+  <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Money">
+  <meta name="apple-mobile-web-app-title" content="Payday">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
   <header class="topbar">
-    <h1>Money Tracker</h1>
-    <div class="period">
-      <button type="button" id="period-prev" class="icon-btn" aria-label="Previous period">&#8249;</button>
-      <div class="period-middle">
-        <select id="period-select" aria-label="Time period">
-          <option value="week">Week</option>
-          <option value="month">Month</option>
-          <option value="year">Year</option>
-          <option value="all">All time</option>
-        </select>
-        <button type="button" id="period-label" class="period-label"></button>
-      </div>
-      <button type="button" id="period-next" class="icon-btn" aria-label="Next period">&#8250;</button>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name" data-app-name>Payday</span>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="chip" id="account-filter" hidden aria-haspopup="dialog">
+        <span data-icon="bank"></span><span id="account-filter-label">All accounts</span><span data-icon="chevronDown"></span>
+      </button>
+      <button type="button" class="icon-btn" data-nav="settings" aria-label="Settings"><span data-icon="settings"></span></button>
     </div>
   </header>
 
-  <nav class="tabs" aria-label="Sections">
-    <button type="button" class="tab" data-view="dashboard" aria-current="page">
-      <span class="tab-icon" aria-hidden="true">&#9673;</span>Overview
-    </button>
-    <button type="button" class="tab" data-view="work">
-      <span class="tab-icon" aria-hidden="true">&#9201;</span>Work
-    </button>
-    <button type="button" class="tab" data-view="spending">
-      <span class="tab-icon" aria-hidden="true">&#9636;</span>Spending
-    </button>
-    <button type="button" class="tab" data-view="settings">
-      <span class="tab-icon" aria-hidden="true">&#9881;</span>Settings
-    </button>
-  </nav>
+  <div class="period-bar">
+    <div class="segmented" id="period-select" role="radiogroup" aria-label="Time period">
+      <button type="button" role="radio" data-period="week">Week</button>
+      <button type="button" role="radio" data-period="month">Month</button>
+      <button type="button" role="radio" data-period="year">Year</button>
+      <button type="button" role="radio" data-period="all">All</button>
+    </div>
+    <div class="period-nav">
+      <button type="button" class="icon-btn small" id="period-prev" aria-label="Previous period"><span data-icon="chevronLeft"></span></button>
+      <button type="button" class="period-label" id="period-label"></button>
+      <button type="button" class="icon-btn small" id="period-next" aria-label="Next period"><span data-icon="chevronRight"></span></button>
+    </div>
+  </div>
 
   <main>
-    <!-- ================= OVERVIEW ================= -->
-    <section id="view-dashboard" class="view">
-      <div id="onboarding" class="card notice" hidden>
-        <h2>Getting started</h2>
-        <ol>
-          <li>Set your hourly pay and how much you want to spend in <a href="#settings" data-goto="settings">Settings</a>.</li>
-          <li>Log your hours on the <a href="#work" data-goto="work">Work</a> tab.</li>
-          <li>Log what you buy on the <a href="#spending" data-goto="spending">Spending</a> tab.</li>
+    <!-- ================= HOME ================= -->
+    <section id="view-home" class="view" data-view="home">
+      <div id="onboarding" class="card onboarding" hidden>
+        <h2>Welcome</h2>
+        <p class="muted">Three quick steps and you're set.</p>
+        <ol class="steps">
+          <li><button type="button" class="link" data-nav="settings">Set your pay and spending %</button></li>
+          <li><button type="button" class="link" data-open="shift">Log your hours</button> or <button type="button" class="link" data-open="upload">scan a pay stub</button></li>
+          <li><button type="button" class="link" data-open="expense">Add what you spend</button></li>
         </ol>
       </div>
+
       <div class="card hero">
-        <div class="hero-label">Left to spend</div>
-        <div id="hero-remaining" class="hero-amount">$0.00</div>
-        <div class="meter" role="progressbar" aria-label="Share of spending budget used"
-             aria-valuemin="0" aria-valuemax="100" id="budget-meter">
-          <div class="meter-fill" id="budget-meter-fill"></div>
+        <div class="ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+            <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"></circle>
+          </svg>
         </div>
-        <div id="hero-detail" class="hero-detail"></div>
+        <div class="hero-text">
+          <div class="hero-label" id="hero-label">Left to spend</div>
+          <div class="hero-amount" id="hero-remaining">$0.00</div>
+          <div class="hero-detail" id="hero-detail"></div>
+        </div>
       </div>
 
-      <div class="card">
-        <label for="spend-slider" class="slider-label">
-          I can spend <strong><span id="spend-percent-out">50</span>%</strong> of my take-home pay
-        </label>
+      <div class="card split-card">
+        <div class="split-head">
+          <label for="spend-slider">You can spend <strong><span id="spend-percent-out">50</span>%</strong> of take-home pay</label>
+        </div>
         <input type="range" id="spend-slider" min="0" max="100" step="1" value="50">
         <div class="split">
-          <div class="split-item spend">
-            <div class="split-name">Spending money</div>
-            <div class="split-value" id="split-spend">$0.00</div>
+          <div class="split-item">
+            <span class="dot spend"></span>
+            <div><div class="split-name">Spending money</div><div class="split-value" id="split-spend">$0.00</div></div>
           </div>
-          <div class="split-item save">
-            <div class="split-name">Savings (<span id="save-percent-out">50</span>%)</div>
-            <div class="split-value" id="split-save">$0.00</div>
+          <div class="split-item">
+            <span class="dot save"></span>
+            <div><div class="split-name">Savings · <span id="save-percent-out">50</span>%</div><div class="split-value" id="split-save">$0.00</div></div>
           </div>
         </div>
       </div>
@@ -89,174 +91,87 @@
       <div class="stats" id="stats"></div>
 
       <div class="card">
-        <h2>Spending by category</h2>
+        <div class="card-head"><h2>Spending by category</h2></div>
         <div id="category-breakdown"></div>
       </div>
 
       <div class="card" id="account-breakdown-card" hidden>
-        <h2>By account</h2>
+        <div class="card-head"><h2>By account</h2><span class="muted small">pay is estimated take-home</span></div>
         <div id="account-breakdown"></div>
-        <p class="muted small">Money in from hours is your estimated take-home pay.</p>
       </div>
 
+      <div class="card">
+        <div class="card-head"><h2>Recent</h2></div>
+        <ul class="rows" id="recent-list"></ul>
+      </div>
     </section>
 
-    <!-- ================= WORK ================= -->
-    <section id="view-work" class="view" hidden>
-      <form id="shift-form" class="card form" novalidate>
-        <h2 id="shift-form-title">Log hours worked</h2>
-        <div class="row">
-          <label>Date
-            <input type="date" name="date" required>
-          </label>
-          <label>Hours
-            <input type="number" name="hours" inputmode="decimal" min="0.01" max="24" step="0.01" required placeholder="e.g. 7.5">
-          </label>
+    <!-- ================= HOURS ================= -->
+    <section id="view-hours" class="view" data-view="hours" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Hours &amp; pay</h1>
+          <p class="muted" id="hours-summary"></p>
         </div>
-        <details class="times">
-          <summary>Work it out from start and end times</summary>
-          <div class="row three">
-            <label>Start <input type="time" name="start"></label>
-            <label>End <input type="time" name="end"></label>
-            <label>Unpaid break (min) <input type="number" name="break" inputmode="numeric" min="0" step="1" value="0"></label>
-          </div>
-        </details>
-        <div class="row">
-          <label>Hourly pay
-            <input type="text" name="rate" inputmode="decimal" required autocomplete="off">
-          </label>
-          <label>Tips / bonus (optional)
-            <input type="text" name="tips" inputmode="decimal" placeholder="0.00" autocomplete="off">
-          </label>
+        <div class="head-actions">
+          <button type="button" class="btn ghost" data-open="upload" data-kind="paystub"><span data-icon="scan"></span>Scan</button>
+          <button type="button" class="btn primary" data-open="shift"><span data-icon="plus"></span>Hours</button>
         </div>
-        <label>Deposited to
-          <select name="account" class="account-select"></select>
-          <small class="no-accounts-hint">Add your bank accounts and cards in <a href="#settings" data-goto="settings">Settings</a> to track where money goes.</small>
-        </label>
-        <label>Note (optional)
-          <input type="text" name="note" maxlength="200" placeholder="e.g. Saturday shift" autocomplete="off">
-        </label>
-        <div class="preview" id="shift-preview" aria-live="polite"></div>
-        <p class="error" id="shift-error" role="alert"></p>
-        <div class="actions">
-          <button type="submit" class="primary" id="shift-submit">Add hours</button>
-          <button type="button" class="secondary" id="shift-cancel" hidden>Cancel edit</button>
-        </div>
-      </form>
-
-      <div class="card">
-        <h2>Hours in this period</h2>
-        <ul class="entries" id="shift-list"></ul>
       </div>
+      <div class="card list-card"><ul class="rows" id="shift-list"></ul></div>
 
-      <form id="income-form" class="card form" novalidate>
-        <h2 id="income-form-title">Other income</h2>
-        <p class="muted small">Money that isn't from the hours above, like a refund, gift, or side job. Enter the amount you actually received.</p>
-        <div class="row">
-          <label>Date
-            <input type="date" name="date" required>
-          </label>
-          <label>Amount
-            <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off">
-          </label>
-        </div>
-        <label>Where it came from
-          <input type="text" name="source" list="source-options" maxlength="40" placeholder="e.g. Refund" autocomplete="off">
-          <datalist id="source-options">
-            <option value="Refund"><option value="Gift"><option value="Side job"><option value="Transfer in">
-            <option value="Interest"><option value="Deposit"><option value="Other">
-          </datalist>
-        </label>
-        <label>Deposited to
-          <select name="account" class="account-select"></select>
-        </label>
-        <label>Note (optional)
-          <input type="text" name="note" maxlength="200" autocomplete="off">
-        </label>
-        <p class="error" id="income-error" role="alert"></p>
-        <div class="actions">
-          <button type="submit" class="primary" id="income-submit">Add income</button>
-          <button type="button" class="secondary" id="income-cancel" hidden>Cancel edit</button>
-        </div>
-      </form>
-
-      <div class="card">
-        <h2>Other income in this period</h2>
-        <ul class="entries" id="income-list"></ul>
+      <div class="view-head sub">
+        <h2>Other income</h2>
+        <button type="button" class="btn ghost" data-open="income"><span data-icon="plus"></span>Income</button>
       </div>
+      <div class="card list-card"><ul class="rows" id="income-list"></ul></div>
     </section>
 
     <!-- ================= SPENDING ================= -->
-    <section id="view-spending" class="view" hidden>
-      <form id="expense-form" class="card form" novalidate>
-        <h2 id="expense-form-title">Log spending</h2>
-        <div class="row">
-          <label>Date
-            <input type="date" name="date" required>
-          </label>
-          <label>Amount
-            <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off">
-          </label>
+    <section id="view-spending" class="view" data-view="spending" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Spending</h1>
+          <p class="muted" id="spending-summary"></p>
         </div>
-        <label>Category
-          <input type="text" name="category" list="category-options" maxlength="40" placeholder="Pick or type one" autocomplete="off">
-          <datalist id="category-options"></datalist>
-        </label>
-        <label>Paid from
-          <select name="account" class="account-select"></select>
-          <small class="no-accounts-hint">Add your bank accounts and cards in <a href="#settings" data-goto="settings">Settings</a> to track where money goes.</small>
-        </label>
-        <label>Note (optional)
-          <input type="text" name="note" maxlength="200" placeholder="e.g. Lunch with friends" autocomplete="off">
-        </label>
-        <div class="preview" id="expense-preview" aria-live="polite"></div>
-        <p class="error" id="expense-error" role="alert"></p>
-        <div class="actions">
-          <button type="submit" class="primary" id="expense-submit">Add spending</button>
-          <button type="button" class="secondary" id="expense-cancel" hidden>Cancel edit</button>
-        </div>
-      </form>
-
-      <div class="card form" id="import-card">
-        <h2>Import a bank statement</h2>
-        <p class="muted small">Upload a PDF statement or a CSV file from your bank or card. It's read on this device only.
-          The file isn't uploaded or saved, and you check every transaction before anything is added.</p>
-        <label class="secondary file-btn">Choose PDF or CSV
-          <input type="file" id="statement-file" accept=".pdf,.csv,application/pdf,text/csv">
-        </label>
-        <p class="muted" id="import-status" aria-live="polite"></p>
-        <div id="import-review" hidden>
-          <div class="row">
-            <label>These transactions are from
-              <select id="import-account" class="account-select"></select>
-            </label>
-            <div class="import-tools">
-              <button type="button" class="link-btn" id="import-swap">Spending and income backwards? Swap</button>
-              <button type="button" class="link-btn" id="import-toggle-all">Select all</button>
-            </div>
-          </div>
-          <ul class="import-list" id="import-list"></ul>
-          <p class="error" id="import-error" role="alert"></p>
-          <div class="actions wrap">
-            <button type="button" class="primary" id="import-confirm">Import</button>
-            <button type="button" class="secondary" id="import-cancel">Cancel</button>
-          </div>
+        <div class="head-actions">
+          <button type="button" class="btn ghost" data-open="upload" data-kind="statement"><span data-icon="upload"></span>Import</button>
+          <button type="button" class="btn primary" data-open="expense"><span data-icon="plus"></span>Spend</button>
         </div>
       </div>
+      <div class="card list-card"><ul class="rows" id="expense-list"></ul></div>
+    </section>
 
-      <div class="card">
-        <h2>Spending in this period</h2>
-        <ul class="entries" id="expense-list"></ul>
+    <!-- ================= FILES ================= -->
+    <section id="view-files" class="view" data-view="files" hidden>
+      <div class="view-head">
+        <div>
+          <h1>Files</h1>
+          <p class="muted" id="files-summary">Pay stubs, time cards, receipts and statements.</p>
+        </div>
+        <div class="head-actions">
+          <button type="button" class="btn primary" data-open="upload"><span data-icon="upload"></span>Upload</button>
+        </div>
       </div>
+      <div class="filter-chips" id="file-filters" role="radiogroup" aria-label="Show">
+        <button type="button" role="radio" data-kind="">All</button>
+        <button type="button" role="radio" data-kind="paystub">Pay stubs</button>
+        <button type="button" role="radio" data-kind="timecard">Time cards</button>
+        <button type="button" role="radio" data-kind="receipt">Receipts</button>
+        <button type="button" role="radio" data-kind="statement">Statements</button>
+        <button type="button" role="radio" data-kind="other">Other</button>
+      </div>
+      <div class="file-grid" id="file-grid"></div>
     </section>
 
     <!-- ================= SETTINGS ================= -->
-    <section id="view-settings" class="view" hidden>
-      <div class="card form" id="account-card" hidden>
-        <h2>Account</h2>
+    <section id="view-settings" class="view" data-view="settings" hidden>
+      <div class="view-head"><h1>Settings</h1></div>
 
+      <div class="card form" id="account-card" hidden>
+        <h2>Your account</h2>
         <div id="account-signed-out" hidden>
-          <p class="muted">Sign in to back up your data and use it on your phone and computer.
+          <p class="muted">Sign in to back up your data and files and use them on your phone and computer.
             You can keep using the app without an account.</p>
           <button type="button" class="google-btn" id="google-signin">
             <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
@@ -272,11 +187,11 @@
             </label>
             <p class="error" id="email-error" role="alert"></p>
             <p class="ok-text" id="email-info" aria-live="polite"></p>
-            <div class="actions wrap">
-              <button type="submit" class="primary" id="email-submit">Sign in</button>
-              <button type="button" class="link-btn" id="email-mode">New here? Create an account</button>
+            <div class="actions">
+              <button type="submit" class="btn primary" id="email-submit">Sign in</button>
+              <button type="button" class="link" id="email-mode">New here? Create an account</button>
             </div>
-            <button type="button" class="link-btn" id="forgot-password">Forgot password?</button>
+            <button type="button" class="link" id="forgot-password">Forgot password?</button>
           </form>
         </div>
 
@@ -288,28 +203,33 @@
           </label>
           <p class="error" id="recovery-error" role="alert"></p>
           <div class="actions">
-            <button type="submit" class="primary">Save new password</button>
+            <button type="submit" class="btn primary">Save new password</button>
           </div>
         </form>
 
         <div id="account-signed-in" hidden>
-          <p>Signed in as <strong id="account-email"></strong></p>
-          <p class="sync-status" id="sync-status" aria-live="polite"></p>
-          <div class="actions wrap">
-            <button type="button" class="secondary" id="sync-now">Sync now</button>
-            <button type="button" class="secondary" id="sign-out">Sign out</button>
+          <div class="account-row">
+            <div class="avatar" aria-hidden="true"><span data-icon="cloud"></span></div>
+            <div>
+              <div>Signed in as <strong id="account-email"></strong></div>
+              <div class="sync-status" id="sync-status" aria-live="polite"></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn ghost" id="sync-now">Sync now</button>
+            <button type="button" class="btn ghost" id="sign-out">Sign out</button>
           </div>
         </div>
       </div>
 
       <div class="card form" id="accounts-card">
         <h2>Bank accounts &amp; cards</h2>
-        <p class="muted small">Add the places your money goes in and out of, like checking, savings, a credit card or cash.
-          Just a nickname. Never enter account numbers.</p>
-        <ul class="entries" id="accounts-list"></ul>
+        <p class="muted small">Optional. Add nicknames for where your money goes in and out, like checking,
+          savings, a credit card or cash. Never enter account numbers.</p>
+        <ul class="rows compact" id="accounts-list"></ul>
         <form id="account-form" class="inline-form" novalidate>
           <input type="text" name="name" maxlength="40" placeholder="e.g. Chase Checking" autocomplete="off" aria-label="New account name">
-          <button type="submit" class="secondary">Add</button>
+          <button type="submit" class="btn ghost">Add</button>
         </form>
         <p class="error" id="account-error" role="alert"></p>
       </div>
@@ -318,16 +238,17 @@
         <h2>Pay &amp; budget</h2>
         <label>Usual hourly pay
           <input type="text" name="rate" inputmode="decimal" required autocomplete="off">
-          <small>Used as the default when you log hours. You can change it per shift.</small>
+          <small>The default when you log hours. You can change it per shift.</small>
         </label>
-        <label>Taxes &amp; deductions (%)
-          <input type="number" name="tax" inputmode="decimal" min="0" max="100" step="0.1" required>
-          <small>A rough estimate of what comes out of your paycheck. Use 0 to track gross pay.</small>
-        </label>
-        <label>I can spend (%) of take-home pay
-          <input type="number" name="spend" inputmode="decimal" min="0" max="100" step="1" required>
-          <small>The rest is counted as savings.</small>
-        </label>
+        <div class="row">
+          <label>Taxes &amp; deductions %
+            <input type="number" name="tax" inputmode="decimal" min="0" max="100" step="0.1" required>
+          </label>
+          <label>You can spend %
+            <input type="number" name="spend" inputmode="decimal" min="0" max="100" step="1" required>
+          </label>
+        </div>
+        <small class="muted">Taxes are an estimate. Pay stubs you scan use their real net pay instead.</small>
         <div class="row">
           <label>Currency
             <select name="currency">
@@ -344,7 +265,7 @@
               <option value="ZAR">ZAR (R)</option>
             </select>
           </label>
-          <label>Week starts on
+          <label>Week starts
             <select name="weekStart">
               <option value="1">Monday</option>
               <option value="0">Sunday</option>
@@ -353,37 +274,239 @@
         </div>
         <p class="error" id="settings-error" role="alert"></p>
         <div class="actions">
-          <button type="submit" class="primary">Save settings</button>
-          <span class="saved" id="settings-saved" aria-live="polite"></span>
+          <button type="submit" class="btn primary">Save</button>
+          <span class="ok-text" id="settings-saved" aria-live="polite"></span>
         </div>
       </form>
 
       <div class="card form">
         <h2>Your data</h2>
-        <p class="muted" id="data-explainer">Everything is saved in this browser on this device<span id="data-explainer-cloud" hidden>,
-          and in your account when you're signed in</span>. Download a backup now and then. You can also use it to move
-          your data to another phone or computer.</p>
+        <p class="muted small" id="data-explainer">Saved in this browser on this device<span id="data-explainer-cloud" hidden>,
+          and in your account when you're signed in</span>. A backup file covers your entries; files you upload are kept separately.</p>
         <div class="actions wrap">
-          <button type="button" class="secondary" id="export-json">Download backup</button>
-          <label class="secondary file-btn">Restore backup
+          <button type="button" class="btn ghost" id="export-json">Download backup</button>
+          <label class="btn ghost file-btn">Restore backup
             <input type="file" id="import-json" accept="application/json,.json">
           </label>
-          <button type="button" class="secondary" id="export-csv">Export spreadsheet (CSV)</button>
+          <button type="button" class="btn ghost" id="export-csv">Export CSV</button>
         </div>
-        <p class="muted" id="data-status" aria-live="polite"></p>
-        <hr>
-        <button type="button" class="danger" id="clear-all">Delete all data</button>
+        <p class="muted small" id="data-status" aria-live="polite"></p>
+        <button type="button" class="btn danger" id="clear-all">Delete all data</button>
       </div>
+      <p class="footnote muted small"><span data-app-name>Payday</span> · your data stays yours</p>
     </section>
   </main>
 
+  <!-- ================= BOTTOM NAV ================= -->
+  <nav class="tabbar" aria-label="Sections">
+    <button type="button" class="tab" data-nav="home"><span data-icon="home"></span><span>Home</span></button>
+    <button type="button" class="tab" data-nav="hours"><span data-icon="clock"></span><span>Hours</span></button>
+    <button type="button" class="fab" id="fab" aria-label="Add" aria-haspopup="dialog"><span data-icon="plus"></span></button>
+    <button type="button" class="tab" data-nav="spending"><span data-icon="card"></span><span>Spending</span></button>
+    <button type="button" class="tab" data-nav="files"><span data-icon="folder"></span><span>Files</span></button>
+  </nav>
+
+  <!-- ================= SHEETS ================= -->
+  <div class="backdrop" id="backdrop" hidden></div>
+
+  <div class="sheet" id="sheet-add" role="dialog" aria-modal="true" aria-label="Add" hidden>
+    <div class="grabber"></div>
+    <div class="add-grid">
+      <button type="button" class="add-tile" data-open="shift"><span class="tile-icon" data-icon="clock"></span><span>Log hours</span></button>
+      <button type="button" class="add-tile" data-open="expense"><span class="tile-icon" data-icon="card"></span><span>Add spending</span></button>
+      <button type="button" class="add-tile" data-open="income"><span class="tile-icon" data-icon="arrowDown"></span><span>Other income</span></button>
+      <button type="button" class="add-tile accent" data-open="upload"><span class="tile-icon" data-icon="scan"></span><span>Scan or upload</span></button>
+    </div>
+  </div>
+
+  <div class="sheet" id="sheet-shift" role="dialog" aria-modal="true" aria-labelledby="shift-form-title" hidden>
+    <div class="grabber"></div>
+    <form id="shift-form" class="form" novalidate>
+      <div class="sheet-head"><h2 id="shift-form-title">Log hours</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+      <div class="row">
+        <label>Date <input type="date" name="date" required></label>
+        <label>Hours <input type="number" name="hours" inputmode="decimal" min="0.01" step="0.01" required placeholder="7.5"></label>
+      </div>
+      <details class="times">
+        <summary>Use start and end times</summary>
+        <div class="row three">
+          <label>Start <input type="time" name="start"></label>
+          <label>End <input type="time" name="end"></label>
+          <label>Break (min) <input type="number" name="break" inputmode="numeric" min="0" step="1" value="0"></label>
+        </div>
+      </details>
+      <div class="row">
+        <label>Hourly pay <input type="text" name="rate" inputmode="decimal" required autocomplete="off"></label>
+        <label>Tips / extra <input type="text" name="tips" inputmode="decimal" placeholder="0.00" autocomplete="off"></label>
+      </div>
+      <div class="row" id="shift-paystub-fields" hidden>
+        <label>Period start <input type="date" name="periodStart"></label>
+        <label>Period end <input type="date" name="periodEnd"></label>
+      </div>
+      <label id="shift-net-field" hidden>Net pay (take-home) <input type="text" name="net" inputmode="decimal" autocomplete="off"></label>
+      <label>Deposited to <select name="account" class="account-select"></select></label>
+      <label>Note <input type="text" name="note" maxlength="200" placeholder="Optional" autocomplete="off"></label>
+      <div class="attachments" id="shift-attachments" hidden></div>
+      <div class="preview" id="shift-preview" aria-live="polite"></div>
+      <p class="error" id="shift-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-ghost" id="shift-delete" hidden><span data-icon="trash"></span>Delete</button>
+        <button type="submit" class="btn primary grow" id="shift-submit">Add hours</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="sheet" id="sheet-expense" role="dialog" aria-modal="true" aria-labelledby="expense-form-title" hidden>
+    <div class="grabber"></div>
+    <form id="expense-form" class="form" novalidate>
+      <div class="sheet-head"><h2 id="expense-form-title">Add spending</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+      <label class="amount-field">Amount <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off"></label>
+      <div class="row">
+        <label>Date <input type="date" name="date" required></label>
+        <label>Category <input type="text" name="category" list="category-options" maxlength="40" placeholder="Food" autocomplete="off"></label>
+      </div>
+      <datalist id="category-options"></datalist>
+      <label>Paid from <select name="account" class="account-select"></select></label>
+      <label>Note <input type="text" name="note" maxlength="200" placeholder="Optional" autocomplete="off"></label>
+      <div class="attachments" id="expense-attachments" hidden></div>
+      <div class="preview" id="expense-preview" aria-live="polite"></div>
+      <p class="error" id="expense-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-ghost" id="expense-delete" hidden><span data-icon="trash"></span>Delete</button>
+        <button type="submit" class="btn primary grow" id="expense-submit">Add spending</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="sheet" id="sheet-income" role="dialog" aria-modal="true" aria-labelledby="income-form-title" hidden>
+    <div class="grabber"></div>
+    <form id="income-form" class="form" novalidate>
+      <div class="sheet-head"><h2 id="income-form-title">Other income</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+      <p class="muted small">Money that isn't from your hours, like a refund, gift or side job. Enter what you received.</p>
+      <label class="amount-field">Amount <input type="text" name="amount" inputmode="decimal" required placeholder="0.00" autocomplete="off"></label>
+      <div class="row">
+        <label>Date <input type="date" name="date" required></label>
+        <label>From <input type="text" name="source" list="source-options" maxlength="40" placeholder="Refund" autocomplete="off"></label>
+      </div>
+      <datalist id="source-options">
+        <option value="Refund"><option value="Gift"><option value="Side job"><option value="Transfer in">
+        <option value="Interest"><option value="Paycheck"><option value="Deposit"><option value="Other">
+      </datalist>
+      <label>Deposited to <select name="account" class="account-select"></select></label>
+      <label>Note <input type="text" name="note" maxlength="200" placeholder="Optional" autocomplete="off"></label>
+      <div class="attachments" id="income-attachments" hidden></div>
+      <p class="error" id="income-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-ghost" id="income-delete" hidden><span data-icon="trash"></span>Delete</button>
+        <button type="submit" class="btn primary grow" id="income-submit">Add income</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="sheet tall" id="sheet-upload" role="dialog" aria-modal="true" aria-labelledby="upload-title" hidden>
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="upload-title">Scan or upload</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+
+    <div id="upload-pick">
+      <p class="muted small">Pay stubs, clock-in/out tickets, receipts or bank statements: a photo, PDF or CSV.
+        It's read on this device, and you check everything before it's saved.</p>
+      <div class="pick-grid">
+        <label class="pick-tile">
+          <span class="tile-icon" data-icon="camera"></span><span>Take a photo</span>
+          <input type="file" id="upload-camera" accept="image/*" capture="environment">
+        </label>
+        <label class="pick-tile">
+          <span class="tile-icon" data-icon="upload"></span><span>Choose a file</span>
+          <input type="file" id="upload-file" accept="image/*,application/pdf,.pdf,.csv,text/csv">
+        </label>
+      </div>
+    </div>
+
+    <div id="upload-reading" hidden>
+      <div class="reading">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="reading-text" id="reading-text" aria-live="polite">Reading…</div>
+        <div class="progress"><div class="progress-fill" id="reading-progress"></div></div>
+        <p class="muted small" id="reading-hint"></p>
+      </div>
+    </div>
+
+    <div id="upload-review" hidden>
+      <div class="review-file">
+        <div class="thumb" id="review-thumb"></div>
+        <div class="review-file-text">
+          <div class="file-name" id="review-name"></div>
+          <div class="muted small" id="review-meta"></div>
+        </div>
+      </div>
+      <div class="kind-chips segmented wide" id="review-kind" role="radiogroup" aria-label="What is this?">
+        <button type="button" role="radio" data-kind="paystub">Pay stub</button>
+        <button type="button" role="radio" data-kind="timecard">Time card</button>
+        <button type="button" role="radio" data-kind="receipt">Receipt</button>
+        <button type="button" role="radio" data-kind="statement">Statement</button>
+        <button type="button" role="radio" data-kind="other">Other</button>
+      </div>
+      <p class="found-note small" id="review-found"></p>
+
+      <form id="review-form" class="form" novalidate></form>
+
+      <div id="statement-review" hidden>
+        <div class="row">
+          <label>These are from <select id="import-account" class="account-select"></select></label>
+          <div class="import-tools">
+            <button type="button" class="link" id="import-swap">Backwards? Swap in/out</button>
+            <button type="button" class="link" id="import-toggle-all">Select all</button>
+          </div>
+        </div>
+        <ul class="import-list" id="import-list"></ul>
+      </div>
+
+      <label class="check-row" id="keep-file-row"><input type="checkbox" id="keep-file" checked> Keep a copy in Files</label>
+      <p class="error" id="review-error" role="alert"></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost" id="review-back">Back</button>
+        <button type="button" class="btn primary grow" id="review-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet tall" id="sheet-viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title" hidden>
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2 id="viewer-title">File</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+    <div class="viewer-media" id="viewer-media"></div>
+    <div class="form">
+      <div class="row">
+        <label>Type
+          <select id="viewer-kind">
+            <option value="paystub">Pay stub</option><option value="timecard">Time card</option>
+            <option value="receipt">Receipt</option><option value="statement">Statement</option><option value="other">Other</option>
+          </select>
+        </label>
+        <label>Date <input type="date" id="viewer-date"></label>
+      </div>
+      <label>Note <input type="text" id="viewer-note" maxlength="200" placeholder="Optional" autocomplete="off"></label>
+    </div>
+    <div class="viewer-info" id="viewer-info"></div>
+    <div class="sheet-actions">
+      <button type="button" class="btn danger-ghost" id="viewer-delete"><span data-icon="trash"></span>Delete file</button>
+      <a class="btn ghost" id="viewer-open" target="_blank" rel="noopener">Open</a>
+    </div>
+  </div>
+
+  <div class="sheet" id="sheet-accounts" role="dialog" aria-modal="true" aria-label="Show account" hidden>
+    <div class="grabber"></div>
+    <div class="sheet-head"><h2>Show</h2><button type="button" class="icon-btn" data-close aria-label="Close"><span data-icon="x"></span></button></div>
+    <div class="choice-list" id="account-choices"></div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="config.js?v=3"></script>
-  <script src="calc.js?v=3"></script>
-  <script src="importer.js?v=3"></script>
-  <script src="app.js?v=3"></script>
-  <script src="vendor/supabase.js?v=3"></script>
-  <script src="cloud.js?v=3"></script>
+  <script src="config.js?v=4"></script>
+  <script src="calc.js?v=4"></script>
+  <script src="importer.js?v=4"></script>
+  <script src="files.js?v=4"></script>
+  <script src="app.js?v=4"></script>
+  <script src="vendor/supabase.js?v=4"></script>
+  <script src="cloud.js?v=4"></script>
 </body>
 </html>

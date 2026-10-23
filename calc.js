@@ -40,6 +40,29 @@
     return roundClean((cents * percent) / 100);
   }
 
+  /*
+   * Gross pay, taxes and take-home for a set of shifts. Taxes are the user's
+   * estimate (taxPercent), except for entries added from a pay stub, which
+   * record the actual net pay (netCents) so their real deductions are used.
+   */
+  function wages(shifts, taxPercent) {
+    let gross = 0;
+    let estimatedGross = 0;
+    let actualTaxes = 0;
+    shifts.forEach(function (s) {
+      const g = shiftEarningsCents(s);
+      gross += g;
+      if (typeof s.netCents === 'number') actualTaxes += g - s.netCents;
+      else estimatedGross += g;
+    });
+    const taxes = percentOf(estimatedGross, taxPercent) + actualTaxes;
+    return { gross: gross, taxes: taxes, takeHome: gross - taxes };
+  }
+
+  function daysBetween(start, end) {
+    return Math.round((parseDate(end) - parseDate(start)) / 86400000) + 1;
+  }
+
   // Hours between two "HH:MM" times minus an unpaid break, in hours.
   // If the end is not after the start the shift is assumed to cross midnight.
   function hoursFromTimes(start, end, breakMinutes) {
@@ -143,20 +166,18 @@
     const incomes = (state.incomes || []).filter(function (x) { return inRange(x.date, range); });
 
     let hours = 0;
-    let gross = 0;
-    shifts.forEach(function (s) {
-      hours += s.hours;
-      gross += shiftEarningsCents(s);
-    });
+    shifts.forEach(function (s) { hours += s.hours; });
     hours = Math.round(hours * 100) / 100;
+    const w = wages(shifts, settings.taxPercent);
+    const gross = w.gross;
 
     // Other income (refunds, gifts, side jobs...) is entered as the amount
     // actually received, so the tax estimate only applies to wages.
     let otherIncome = 0;
     incomes.forEach(function (x) { otherIncome += x.amountCents; });
 
-    const taxes = percentOf(gross, settings.taxPercent);
-    const wageTakeHome = gross - taxes;
+    const taxes = w.taxes;
+    const wageTakeHome = w.takeHome;
     const takeHome = wageTakeHome + otherIncome;
     const spendable = percentOf(takeHome, settings.spendPercent);
     const savings = takeHome - spendable;
@@ -206,13 +227,13 @@
     const groups = {};
     function group(id) {
       const key = id && known[id] ? id : '';
-      if (!groups[key]) groups[key] = { gross: 0, other: 0, out: 0, count: 0 };
+      if (!groups[key]) groups[key] = { shifts: [], other: 0, out: 0, count: 0 };
       return groups[key];
     }
     state.shifts.forEach(function (s) {
       if (!inRange(s.date, range)) return;
       const g = group(s.accountId);
-      g.gross += shiftEarningsCents(s);
+      g.shifts.push(s);
       g.count++;
     });
     (state.incomes || []).forEach(function (x) {
@@ -230,8 +251,8 @@
     const rows = (state.accounts || []).map(function (a) { return { id: a.id, name: a.name }; });
     if (groups['']) rows.push({ id: '', name: '' });
     return rows.map(function (r) {
-      const g = groups[r.id] || { gross: 0, other: 0, out: 0, count: 0 };
-      const moneyIn = g.gross - percentOf(g.gross, state.settings.taxPercent) + g.other;
+      const g = groups[r.id] || { shifts: [], other: 0, out: 0, count: 0 };
+      const moneyIn = wages(g.shifts, state.settings.taxPercent).takeHome + g.other;
       return { id: r.id, name: r.name, moneyIn: moneyIn, moneyOut: g.out, net: moneyIn - g.out, count: g.count };
     });
   }
@@ -246,7 +267,8 @@
 
   // Bumped when the saved data gains new kinds of information. An older copy
   // of the app refuses to sync data from a newer one rather than drop fields.
-  const DATA_VERSION = 2;
+  const DATA_VERSION = 3;
+  const DOC_KINDS = ['paystub', 'timecard', 'receipt', 'statement', 'other'];
 
   const DEFAULT_SETTINGS = {
     hourlyRateCents: 1500,
@@ -272,6 +294,7 @@
       expenses: [],
       incomes: [],
       accounts: [],
+      documents: [],
       deleted: {}
     };
   }
@@ -313,11 +336,18 @@
     };
 
     const shifts = raw.shifts.map(function (x, i) {
-      if (!x || !parseDate(x.date) || typeof x.hours !== 'number' || !(x.hours > 0) || x.hours > 24 ||
-          !isNonNegInt(x.rateCents) || (x.tipsCents != null && !isNonNegInt(x.tipsCents))) {
-        throw new Error('Work entry #' + (i + 1) + ' is invalid.');
+      const bad = new Error('Work entry #' + (i + 1) + ' is invalid.');
+      if (!x) throw bad;
+      // Entries from a pay stub cover a whole pay period.
+      const hasPeriod = !!(x.periodStart && x.periodEnd);
+      if (hasPeriod && (!parseDate(x.periodStart) || !parseDate(x.periodEnd) || x.periodStart > x.periodEnd)) throw bad;
+      const maxHours = hasPeriod ? 24 * daysBetween(x.periodStart, x.periodEnd) : 24;
+      if (!parseDate(x.date) || typeof x.hours !== 'number' || !(x.hours > 0) || x.hours > maxHours ||
+          !isNonNegInt(x.rateCents) || (x.tipsCents != null && !isNonNegInt(x.tipsCents)) ||
+          (x.netCents != null && !isNonNegInt(x.netCents))) {
+        throw bad;
       }
-      return {
+      const shift = {
         id: String(x.id || newId()),
         date: x.date,
         hours: x.hours,
@@ -327,6 +357,12 @@
         accountId: cleanText(x.accountId, 64),
         updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
       };
+      if (x.netCents != null) shift.netCents = x.netCents;
+      if (hasPeriod) {
+        shift.periodStart = x.periodStart;
+        shift.periodEnd = x.periodEnd;
+      }
+      return shift;
     });
 
     const expenses = raw.expenses.map(function (x, i) {
@@ -369,6 +405,22 @@
       };
     });
 
+    const documents = (Array.isArray(raw.documents) ? raw.documents : []).map(function (x, i) {
+      if (!x || !parseDate(x.date) || !isNonNegInt(x.size)) throw new Error('File #' + (i + 1) + ' is invalid.');
+      return {
+        id: String(x.id || newId()),
+        date: x.date,
+        name: cleanText(x.name, 120) || 'File',
+        mime: cleanText(x.mime, 80),
+        size: x.size,
+        kind: DOC_KINDS.indexOf(x.kind) !== -1 ? x.kind : 'other',
+        note: cleanText(x.note, 200),
+        entryId: cleanText(x.entryId, 64),
+        cloudPath: cleanText(x.cloudPath, 200),
+        updatedAt: isTimestamp(x.updatedAt) ? x.updatedAt : 0
+      };
+    });
+
     const deleted = {};
     if (raw.deleted && typeof raw.deleted === 'object' && !Array.isArray(raw.deleted)) {
       Object.keys(raw.deleted).sort().forEach(function (id) {
@@ -384,6 +436,7 @@
       expenses: expenses,
       incomes: incomes,
       accounts: accounts,
+      documents: documents,
       deleted: deleted
     };
   }
@@ -442,6 +495,7 @@
     const expenses = mergeList(a.expenses, b.expenses);
     const incomes = mergeList(a.incomes, b.incomes);
     const accounts = mergeList(a.accounts, b.accounts);
+    const documents = mergeList(a.documents, b.documents);
 
     const aSettingsNewer = (a.settingsUpdatedAt || 0) > (b.settingsUpdatedAt || 0) ||
       ((a.settingsUpdatedAt || 0) === (b.settingsUpdatedAt || 0) &&
@@ -459,6 +513,7 @@
       expenses: expenses,
       incomes: incomes,
       accounts: accounts,
+      documents: documents,
       deleted: sortedDeleted
     };
   }
@@ -472,7 +527,7 @@
   function replaceAll(current, incoming, now) {
     const deleted = Object.assign({}, current.deleted, incoming.deleted);
     function everything(st) {
-      return st.shifts.concat(st.expenses, st.incomes || [], st.accounts || []);
+      return st.shifts.concat(st.expenses, st.incomes || [], st.accounts || [], st.documents || []);
     }
     const keep = {};
     everything(incoming).forEach(function (x) { keep[x.id] = true; });
@@ -489,6 +544,7 @@
         expenses: incoming.expenses.map(stamp),
         incomes: (incoming.incomes || []).map(stamp),
         accounts: (incoming.accounts || []).map(stamp),
+        documents: (incoming.documents || []).map(stamp),
         deleted: deleted
       },
       C_EMPTY
@@ -530,7 +586,7 @@
     return rows.map(function (r) { return r.join(','); }).join('\r\n') + '\r\n';
   }
 
-  const C_EMPTY = { settings: DEFAULT_SETTINGS, settingsUpdatedAt: -1, shifts: [], expenses: [], incomes: [], accounts: [], deleted: {} };
+  const C_EMPTY = { settings: DEFAULT_SETTINGS, settingsUpdatedAt: -1, shifts: [], expenses: [], incomes: [], accounts: [], documents: [], deleted: {} };
 
   const api = {
     toCents: toCents,
@@ -555,7 +611,9 @@
     newId: newId,
     toCsv: toCsv,
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
-    DATA_VERSION: DATA_VERSION
+    DATA_VERSION: DATA_VERSION,
+    DOC_KINDS: DOC_KINDS,
+    wages: wages
   };
 
   if (typeof module !== 'undefined' && module.exports) {

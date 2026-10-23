@@ -21,7 +21,12 @@
   const $ = function (sel) { return document.querySelector(sel); };
 
   let session = null;
-  window.MoneyCloud = { isSignedIn: function () { return !!session; } };
+  let sb = null;
+  window.MoneyCloud = {
+    isSignedIn: function () { return !!session; },
+    client: function () { return sb; },
+    userId: function () { return session ? session.user.id : null; }
+  };
 
   if (!cfg.supabaseUrl || !cfg.supabaseKey || !app) return;
 
@@ -47,7 +52,7 @@
   // Errors sent back in the URL by Supabase (e.g. an expired email link).
   const urlError = readUrlError();
 
-  const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
+  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -216,12 +221,21 @@
         $('#sync-status').textContent + ').\n\nSign out anyway? Those changes will be lost.');
       if (!ok) return;
     }
+    // Files are uploaded separately from the data; make sure they made it too.
+    if (window.MoneyFiles) await window.MoneyFiles.syncFiles();
+    const pendingFiles = app.getState().documents.filter(function (d) { return !d.cloudPath; }).length;
+    if (pendingFiles) {
+      const ok = window.confirm(pendingFiles + (pendingFiles === 1 ? ' file hasn\'t' : ' files haven\'t') +
+        ' been uploaded to your account yet.\n\nSign out anyway? ' + (pendingFiles === 1 ? 'It' : 'They') + ' will be removed from this device.');
+      if (!ok) return;
+    }
     // 'local' signs out only this device, not your other phones/computers.
     // (It also works offline: the session is removed from this device either way.)
     await sb.auth.signOut({ scope: 'local' });
     setLinkedUser(null);
-    // Remove the data from this device; it's safe in the account.
+    // Remove the data and files from this device; they're safe in the account.
     app.setState(C.defaultState());
+    window.dispatchEvent(new Event('moneytracker:signedout'));
     app.toast('Signed out. Your data is saved in your account.');
   });
 
@@ -299,6 +313,7 @@
       }
       if (!done) throw new Error('another device kept saving at the same time. Try again.');
       lastSyncOk = true;
+      window.dispatchEvent(new Event('moneytracker:synced'));
       setStatus('Synced at ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
     } catch (error) {
       lastSyncOk = false;
@@ -344,6 +359,7 @@
         return;
       }
       app.setState(C.defaultState());
+      window.dispatchEvent(new Event('moneytracker:signedout')); // clears the other account's files here
     } else if (!linked && hasAnyData(app.getState())) {
       app.toast('The data on this device is being added to your account.');
     }

@@ -1,22 +1,25 @@
-# Money Tracker
+# Payday
 
-A simple website / phone app for tracking:
+*(Working name. Change it in `config.js` (`appName`) and `manifest.webmanifest` (`name`, `short_name`).)*
 
-- **Hours you work** and how much you earned (hourly pay, tips/bonus, start/end times with unpaid breaks, overnight shifts)
-- **Money you spend**, by category
-- **What percent of your pay you can spend**, and how much money that is, with the rest counted as savings
-- **How much you have left to spend** this week / month / year, with a warning bar as you get close to or go over
+A clean, minimal website / phone app for tracking:
 
-It is a Progressive Web App (PWA): one set of files that works as a normal website on a computer and can be
-installed on a phone's home screen, where it opens full-screen like an app and works offline.
+- **Hours you work** and what you earned: by hand, from start/end times, or by **scanning a pay stub or clock-in/out ticket**
+- **Money you spend**: by hand, by **scanning a receipt**, or by **importing a bank statement** (PDF or CSV)
+- **What percent of your pay you can spend**, how much money that is, and how much is **left** this week/month/year
+- **Which bank account or card** money goes in and out of (optional), with a switcher to look at one account at a time
+- **Your files** (pay stubs, time cards, receipts, statements), kept privately in your account
+
+It's a Progressive Web App (PWA): one set of files that works as a website on a computer and can be installed on a
+phone's home screen, where it opens full-screen like an app and works offline.
 
 ## How the numbers are calculated
 
 | Number | Formula |
 | --- | --- |
-| Earned | hours × hourly pay + tips/bonus, for every shift in the period |
-| Taxes & deductions | Earned × your tax % (an estimate you set; use 0 to ignore taxes) |
-| Take-home pay | Earned − taxes |
+| Earned | hours × hourly pay + tips/extra, for every hours entry in the period (for a scanned pay stub: its gross pay) |
+| Taxes & deductions | Earned × your tax % (an estimate you set), except scanned pay stubs, which use gross − net from the stub |
+| Take-home pay | Earned − taxes + other income |
 | Spending money | Take-home × your "I can spend" % |
 | Savings target | Take-home − spending money |
 | Left to spend | Spending money − what you've spent (negative = over budget) |
@@ -37,11 +40,37 @@ Under **Settings → Bank accounts & cards**, add nicknames for where your money
 - The Overview shows money **in**, **out** and the **net** for each account in the selected period. Money in from hours
   is your *estimated* take-home pay. Transfers between your own accounts aren't tracked.
 - Deleting an account keeps its entries; they show as "No account".
+- The **All accounts ▾** button at the top switches the whole app (budget, lists, totals) to one account. New entries
+  default to the account you're looking at.
 
-## Importing bank statements (PDF or CSV)
+## Scanning & uploading files
 
-On the **Spending** tab, **Import a bank statement** reads a PDF statement or a CSV export from your bank or card
-**on your device**. The file isn't uploaded or stored anywhere. You then review every transaction before anything is added:
+Tap **+ → Scan or upload** (or **Scan** on the Hours tab, **Import** on Spending). Take a photo or choose a PDF/CSV.
+The app works out what kind of document it is (you can change it), reads it, and shows what it found so you can
+fix anything before saving. **Reading happens on your device.** PDFs use Mozilla's pdf.js and photos use
+Tesseract text recognition (about 7 MB to download the first time, then cached).
+
+| Document | What's read | What it creates |
+| --- | --- | --- |
+| Pay stub (PDF or photo) | pay date, pay period, hours (from the earnings rows), gross and net pay | an hours entry for the period that uses the stub's **real net pay** instead of your tax estimate |
+| Clock-in/out ticket | date, in/out times, lunch break, total hours | an hours entry |
+| Receipt | store, date, total (not the subtotal) | a spending entry |
+| Bank statement (PDF or CSV) | each transaction | spending and income entries you tick |
+| Anything else | nothing | just the file, in **Files** |
+
+If you've already logged hours inside a pay stub's period, the app warns you (counting both would double your pay)
+and offers to replace them with the pay stub. Every save can be undone from the message that pops up.
+
+The file is kept in **Files** (you can untick this). It's stored on the device and, when you're signed in, in a
+**private** storage bucket in your Supabase account, so it shows up on your other devices. Only you can open it.
+Photos are shrunk to at most 2400 px before saving, and files over 15 MB can be read but not kept.
+
+Photo text recognition is good on clear, flat, well-lit photos and hit-or-miss on crumpled or dim ones. That's why
+you always check the values before saving.
+
+### Bank statements
+
+Reading a statement works the same way, and you review every transaction before anything is added:
 
 - Categories are guessed from the description (e.g. Starbucks → Food, Shell → Gas) and can be changed.
 - Paychecks (`DIRECT DEP`, `PAYROLL`...) come in unticked, because your pay is already counted from the hours you log.
@@ -91,6 +120,13 @@ You'll need to do steps 1–4 yourself, because they happen in your own Supabase
 2. Open **SQL Editor**, paste the whole of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
    This creates the table and the security rules that let each person see only their own data.
    It's safe to run again.
+
+### 1b. Turn on file storage (for pay stubs, receipts, etc.)
+
+In the **SQL Editor**, also run [`supabase/storage.sql`](supabase/storage.sql). It creates a private bucket called
+`documents` (images and PDFs, up to 15 MB each) with rules that only let each signed-in user read and write files in
+their own folder. It's safe to run again. Without it, sign-in and sync still work, but files stay on the device they
+were added on.
 
 ### 2. Point the app at your project
 
@@ -156,9 +192,10 @@ changes that haven't synced yet (for example, it's offline), you'll be warned fi
 
 The app is plain HTML/CSS/JavaScript with no build step, so any static host works. The easiest is GitHub Pages:
 
-1. Merge this branch into `main`.
-2. On GitHub, open the repo → **Settings → Pages**.
-3. Under **Build and deployment**, choose **Deploy from a branch**, branch `main`, folder `/ (root)`, then **Save**.
+1. On GitHub, open the repo → **Settings → Pages**.
+2. Under **Build and deployment**, choose **Deploy from a branch**, pick the branch (currently `claude/keen-bardeen-qdkuij`;
+   use `main` if you merge into it), folder `/ (root)`, then **Save**.
+3. Each push to that branch updates the site within a minute or two.
 4. After a minute or two, the page shows your site's link (usually `https://<your-username>.github.io/<repo-name>/`).
 
 Note: GitHub Pages for a **private** repo needs a paid GitHub plan. On a free plan the repo has to be public. Your
@@ -185,7 +222,8 @@ npm test
 
 Unit tests cover the money math, rounding, overnight shifts, week/month/year date ranges (leap years, daylight
 saving changes, year boundaries), backup validation, CSV export, merging data between devices, accounts and other
-income, and reading bank statements (several CSV layouts and PDF text).
+income, reading bank statements (several CSV layouts and PDF text), and reading pay stubs, time cards and receipts
+(including noisy text from photos).
 
 ## Files
 
@@ -194,11 +232,14 @@ income, and reading bank statements (several CSV layouts and PDF text).
 | `index.html` | The page layout |
 | `styles.css` | Styling (light and dark mode, phone and desktop layouts) |
 | `calc.js` | All calculations, with no UI code, so they can be tested |
-| `app.js` | Forms, lists, dashboard, saving, backup/restore |
+| `app.js` | Screens, sheets, scan/upload review, Files, settings, backup/restore |
+| `files.js` | Keeps uploaded files on the device and in your account; PDF reading and photo text recognition |
 | `config.js` | Your Supabase project URL and publishable key (empty = no accounts) |
 | `cloud.js` | Sign-in (Google, email) and syncing with Supabase |
-| `importer.js` | Reads bank statement CSVs and PDF text into transactions for review (no UI code, so it's tested) |
-| `vendor/pdfjs/` | Mozilla pdf.js v6.3.289 (Apache-2.0), loaded only when you import a PDF |
+| `importer.js` | Reads bank statements, pay stubs, time cards and receipts from text (no UI code, so it's tested) |
+| `vendor/pdfjs/` | Mozilla pdf.js v6.3.289 (Apache-2.0), loaded only when you open a PDF |
+| `vendor/tesseract/` | Tesseract.js 7.0.0 + English data (Apache-2.0), loaded only when you scan a photo |
+| `supabase/storage.sql` | Private file storage bucket and its security rules, run once in Supabase |
 | `supabase/schema.sql` | Database table and security rules, run once in Supabase |
 | `vendor/supabase.js` | Supabase's JavaScript library v2.117.2 (bundled so the app works offline) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and the installable app |
