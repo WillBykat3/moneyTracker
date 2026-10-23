@@ -4,7 +4,7 @@
  * falling back to the cached copy when offline.
  * Bump CACHE when the list of files changes.
  */
-const CACHE = 'money-tracker-v4';
+const CACHE = 'money-tracker-v5';
 const FILES = [
   './',
   'index.html',

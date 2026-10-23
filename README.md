@@ -1,6 +1,6 @@
-# Payday
+# Paykat
 
-*(Working name. Change it in `config.js` (`appName`) and `manifest.webmanifest` (`name`, `short_name`).)*
+*(The name lives in `config.js` (`appName`) and `manifest.webmanifest` (`name`, `short_name`).)*
 
 A clean, minimal website / phone app for tracking:
 

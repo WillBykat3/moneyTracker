@@ -7,7 +7,7 @@
   const I = window.MoneyImport;
   const F = window.MoneyFiles;
   const CFG = window.MONEY_TRACKER_CONFIG || {};
-  const APP_NAME = CFG.appName || 'Payday';
+  const APP_NAME = CFG.appName || 'Paykat';
   const STORAGE_KEY = 'moneyTracker.v1';
   const UI_KEY = 'moneyTracker.ui';
   const DEFAULT_CATEGORIES = ['Food', 'Groceries', 'Transport', 'Gas', 'Rent', 'Bills', 'Phone',

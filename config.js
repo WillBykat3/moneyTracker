@@ -14,7 +14,7 @@
 window.MONEY_TRACKER_CONFIG = {
   // The app's name, shown in the header and tab title. (Also change "name" and
   // "short_name" in manifest.webmanifest, which is used when installing the app.)
-  appName: 'Payday',
+  appName: 'Paykat',
   supabaseUrl: 'https://fkczaghpdzmfnsurlyuh.supabase.co',
   supabaseKey: 'sb_publishable_wBrTEoQqLOi1Nh5bvE46SQ_1CvANp1Y'
 };

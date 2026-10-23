@@ -85,17 +85,7 @@ main { max-width: 640px; margin: 0 auto; padding: 4px 16px 16px; }
   gap: 12px;
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; letter-spacing: -0.03em; }
-.brand-mark {
-  width: 28px; height: 28px; border-radius: 9px;
-  background: linear-gradient(140deg, var(--accent), #0f5f8c);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  position: relative;
-}
-.brand-mark::after {
-  content: ""; position: absolute; inset: 8px; border-radius: 50%;
-  border: 2.5px solid rgba(255, 255, 255, 0.92); border-right-color: transparent;
-  transform: rotate(-30deg);
-}
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; display: block; box-shadow: 0 0 0 1px var(--line); }
 .top-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
 .icon-btn {

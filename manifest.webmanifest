@@ -1,6 +1,6 @@
 {
-  "name": "Payday",
-  "short_name": "Payday",
+  "name": "Paykat",
+  "short_name": "Paykat",
   "description": "Track your hours, pay and spending, and know what you can spend.",
   "start_url": "./",
   "scope": "./",
